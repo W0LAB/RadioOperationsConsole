@@ -6,6 +6,8 @@ top. Each release's section here is also its description on the
 
 ## [Unreleased]
 
+## [2.10.1] - 2026-11-10
+
 **What works differently:**
 - A range check is now taken like a station log instead of run as a net.
   There's no Start or End, no date or time, and saving a check-in no longer
@@ -789,7 +791,8 @@ This version updates the database: once it's run, 2.6.0 can't open the data.
 
 The first release.
 
-[Unreleased]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.0...HEAD
+[Unreleased]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.1...HEAD
+[2.10.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.9.1...v2.10.0
 [2.9.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.9.0...v2.9.1
 [2.9.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.8.0...v2.9.0
