@@ -18,7 +18,9 @@ any of it.
 - An activity type alongside those in
   [activity-lifecycle-and-wrap-up.md](activity-lifecycle-and-wrap-up.md)
   (`LIFE-050`–`056`) and [station-log.md](station-log.md). A range check is
-  run as a net: it is started and ended like one (`LIFE-001`–`007`).
+  taken like a station log, not run as a net: check-ins come in whenever
+  stations call, so it is never started or ended and has no date
+  (`LOG-002`, `LOG-004`, `LIFE-006`).
 - Its check-ins are ordinary check-in records (`PRINCIPLE-002`) with extra
   fields, so call-sign fill-in, removal and restore, history, backup, and
   exports apply unchanged.
@@ -30,8 +32,7 @@ any of it.
 ## The type
 
 - **RANGE-001:** There MUST be a "Range check" activity type, selectable
-  wherever a type is chosen. It is a net: it has a date, a time, Start and
-  End.
+  wherever a type is chosen.
 - **RANGE-002:** A range check MUST have a repeater with a location
   ([repeater-directory.md](repeater-directory.md), `RPT-021`–`023`), picked
   from the directory or placed by hand. Creating one MUST require it; the
@@ -42,6 +43,15 @@ any of it.
   example, one created when setting the repeater failed).
 - **RANGE-003:** Distances and the map's lines for a range check MUST be
   measured from the repeater (`RPT-031`).
+- **RANGE-004:** A range check MUST be ongoing, like a station log: it MUST
+  NOT offer Start or End, ask to be started when a check-in is saved, or
+  show a not-started banner (`LOG-002`, `LIFE-023`, `LIFE-024`); it MUST NOT
+  ask for a date or time, and changing an activity to a range check clears
+  its date (`LOG-004`); it MUST NOT be put in an event (`EVT-020`); and the
+  Activities list MUST show it under **Logs**, marked *Log* (`LOG-005`). Its
+  summary MUST NOT show a start, end, duration, or weather. A closed range
+  check MUST still show as closed and offer Reopen. One started before this
+  rule keeps its start time but is shown and treated the same way.
 
 ## Check-ins
 
@@ -101,6 +111,11 @@ any of it.
   When the operator saves
   Then the save is refused, saying antenna is still needed, and nothing typed
   is lost.
+
+- Given a range check that has never been started
+  When the operator saves a check-in
+  Then it is saved without asking to start a net, and no Start, End, or
+  "not started" banner is shown.
 
 - Given an operator creating a range check without choosing a repeater
   Then Create is unavailable until the repeater is set

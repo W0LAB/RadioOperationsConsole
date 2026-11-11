@@ -6,7 +6,7 @@ import * as api from "./api";
 import type { Activity, ActivitySummary, Checkin, HistoryEntry, RelayMessage, SpotterReport } from "./types";
 import { stationKindLabel } from "./rangeCheck";
 import { formatTimeLines, pad2, splitScheduledAt } from "./utils";
-import { activityTypeLabel, isLog } from "./activityTypes";
+import { activityTypeLabel, isOngoing } from "./activityTypes";
 import { weatherLines } from "./netWeather";
 import { latLonToGridSquare } from "./grid";
 import { formatCoords } from "./geo";
@@ -282,8 +282,9 @@ export function activitySummaryToText(activity: Activity, s: ActivitySummary): s
       .join(" · "),
     activity.location_label ? `Location: ${activity.location_label}` : "",
     "",
-    // A station log stays open for days, so its start and end mean little.
-    ...(isLog(activity.activity_type)
+    // An ongoing activity (station log, range check) is never started or
+    // ended, so its start and end mean little.
+    ...(isOngoing(activity.activity_type)
       ? []
       : [
           s.opened_at ? `Started: ${when(s.opened_at)}` : "Not started",

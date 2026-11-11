@@ -72,10 +72,11 @@ describe("when to ask to start the net (LIFE-024)", () => {
   beforeEach(clearNotYet);
   const due = { ...net, scheduled_at: "2026-10-24 19:00" };
 
-  it("asks a net not started until it's answered Not yet; never an open net or a station log", () => {
+  it("asks a net not started until it's answered Not yet; never an open net, station log or range check", () => {
     expect(shouldAskToStart(net)).toBe(true);
     expect(shouldAskToStart({ ...net, state: "active" })).toBe(false);
     expect(shouldAskToStart({ ...net, activity_type: "station_log" })).toBe(false);
+    expect(shouldAskToStart({ ...net, activity_type: "range_check" })).toBe(false);
   });
 
   it("after an early Not yet, asks again once the scheduled time comes", () => {

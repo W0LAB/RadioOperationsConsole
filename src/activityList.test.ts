@@ -47,6 +47,7 @@ const ACTS = [
   activity("o1", "Storm Net", "skywarn", "active", { opened_at: new Date(2026, 9, 1, 11, 2).toISOString(), frequency: "146.940" }),
   activity("l1", "VHF Simplex", "station_log", "scheduled"),
   activity("l2", "HF Log", "station_log", "closed"),
+  activity("r1", "Repeater range check", "range_check", "active"),
 ];
 
 const ids = (rows: { activity: Activity }[]) => rows.map((r) => r.activity.id);
@@ -55,13 +56,14 @@ const sectionIds = (acts: Activity[]) =>
   activitySections(acts, NOW).map((s) => [s.id, ids(s.rows)] as [string, string[]]);
 
 describe("activitySections (UX-OPS-015)", () => {
-  it("lists what's happening in order: open, coming up, station logs, closed (folded)", () => {
+  it("lists what's happening in order: open, coming up, logs, closed (folded)", () => {
     expect(sectionIds(ACTS)).toEqual([
       ["open", ["o1"]],
       // u2 is in an event, so it's in the event's block rather than Coming up.
       ["event:ev9", ["u2"]],
       ["upcoming", ["u4", "u1", "u3"]],
-      ["logs", ["l1"]],
+      // A range check is ongoing like a station log, even one started before it was.
+      ["logs", ["r1", "l1"]],
       ["closed", ["c2", "c1", "l2"]],
     ]);
   });
@@ -117,6 +119,7 @@ describe("activityRow", () => {
     expect(row("c2")).toMatchObject({ when: "Tue 9/29 19:01", state: "Closed", tone: "dim" });
     expect(row("l1")).toMatchObject({ when: "", state: "Log", tone: "plain" });
     expect(row("l2")).toMatchObject({ state: "Closed", tone: "dim" });
+    expect(row("r1")).toMatchObject({ when: "", state: "Log", tone: "plain" });
   });
 
   it("marks a net whose time has come but hasn't started in amber", () => {

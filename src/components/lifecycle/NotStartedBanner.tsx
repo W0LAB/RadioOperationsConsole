@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Activity } from "../../types";
-import { isLog, isRelay } from "../../activityTypes";
+import { isOngoing, isRelay } from "../../activityTypes";
 import { splitScheduledAt } from "../../utils";
 import { TriangleAlert } from "lucide-react";
 
@@ -41,7 +41,7 @@ export default function NotStartedBanner({ activity }: { activity: Activity }) {
     return () => clearInterval(id);
   }, []);
 
-  if (activity.state !== "scheduled" || isLog(activity.activity_type)) return null;
+  if (activity.state !== "scheduled" || isOngoing(activity.activity_type)) return null;
   const noun = isRelay(activity.activity_type) ? "relay" : "net";
   const hint = scheduledHint(activity.scheduled_at, now);
 

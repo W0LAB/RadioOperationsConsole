@@ -104,7 +104,7 @@ and stops later edits from quietly changing a net that is over.
   its own Start: nets are started and ended in one place, the top bar, so
   operators learn where to look (except the first check-in's prompt,
   `LIFE-024`). It MUST NOT block logging: some nets take
-  early check-ins. A station log, never started, has none.
+  early check-ins. A station log or range check, never started, has none.
 - **LIFE-024:** Saving a check-in to a net that hasn't been started MUST
   ask "Start the net now?" in a dialog over everything, taking no other
   input until it's answered: **Start now** (focused, so Enter starts it,
@@ -117,7 +117,7 @@ and stops later edits from quietly changing a net that is over.
   keeps being read. Not yet is remembered while the application is open.
   This is the one Start outside the top bar (`LIFE-023`): a forgotten Start
   is caught as the net begins rather than fixed in Edit afterwards. A
-  station log has none.
+  station log or range check has none.
 
 ## Wrapping up a net
 

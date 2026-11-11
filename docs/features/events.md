@@ -58,7 +58,8 @@ real-world need.
 ## Activities
 
 - **EVT-020:** The activity form MUST offer an **Event** choice, defaulting to
-  none, only when at least one event exists, and never for a station log.
+  none, only when at least one event exists, and never for a station log or
+  range check.
   Moving an activity into or out of an event MUST be recorded in its history.
 - **EVT-021:** The Activities list MUST show each event's activities
   together as their own block, named after the event with its day and

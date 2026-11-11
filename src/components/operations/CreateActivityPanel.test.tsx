@@ -93,7 +93,7 @@ describe("CreateActivityPanel", () => {
     await user.click(screen.getByRole("button", { name: "Place repeater on map" }));
     await user.click(screen.getByRole("button", { name: "Choose point" }));
     await user.click(screen.getByRole("button", { name: "Create activity" }));
-    expect(api.createActivity).toHaveBeenCalledWith("Range check", "range_check", expect.any(String), null, "op1");
+    expect(api.createActivity).toHaveBeenCalledWith("Range check", "range_check", null, null, "op1");
     expect(api.setActivityRepeater).toHaveBeenCalledWith("new", "Repeater site", 28.5, -81.4);
     expect(api.setActivityLocationCoords).toHaveBeenCalledWith("new", 28.0, -81.0, "Pat's QTH");
   });

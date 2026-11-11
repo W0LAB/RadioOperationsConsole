@@ -19,13 +19,18 @@ export interface ActivityTypeDef {
   /** Sections shown in summaries even when they're empty. */
   sections: SummarySection[];
   /**
-   * A running log rather than a net: never started or ended, and its records
-   * are contacts with radio details (frequency, mode, RST, power, antenna,
-   * notes) instead of check-ins with traffic.
+   * Ongoing rather than a net: never started or ended, with no date or time,
+   * and not part of an event. Records are taken whenever they come in.
+   */
+  ongoing?: boolean;
+  /**
+   * A station log: ongoing, and its records are contacts with radio details
+   * (frequency, mode, RST, power, antenna, notes) instead of check-ins with
+   * traffic.
    */
   log?: boolean;
   /**
-   * A repeater range check: a net whose check-ins must each give a cross
+   * A repeater range check: ongoing, and its check-ins must each give a cross
    * street pinned on the map, station type, power, and signal reports both
    * ways, and which must have the repeater's location (rangeCheck.ts).
    */
@@ -62,14 +67,16 @@ export const ACTIVITY_TYPES: ActivityTypeDef[] = [
     description:
       "An ongoing log of your own contacts (e.g. VHF simplex), with no start or end: frequency, mode, signal reports, power, antenna, and notes.",
     sections: ["checkins"],
+    ongoing: true,
     log: true,
   },
   {
     id: "range_check",
     label: "Range check",
     description:
-      "A repeater range check: each station's cross street pinned on the map, station type, power, and how each side hears the other.",
+      "A repeater range check, taken like a log with no start or end: each station's cross street pinned on the map, station type, power, and how each side hears the other.",
     sections: ["checkins"],
+    ongoing: true,
     rangeCheck: true,
   },
   {
@@ -99,16 +106,24 @@ export function activityTypeDef(id: string): ActivityTypeDef {
   return { ...other, id, label: id.replace(/_/g, " ") || other.label };
 }
 
-/** Whether this type is a running contact log rather than a net. */
+/**
+ * Whether this type is ongoing rather than a net: no Start or End, no date or
+ * time, no event (station logs and range checks).
+ */
+export function isOngoing(id: string): boolean {
+  return activityTypeDef(id).ongoing === true;
+}
+
+/** Whether this type is a station log, whose records are contacts. */
 export function isLog(id: string): boolean {
   return activityTypeDef(id).log === true;
 }
 
-/** Whether this type is a repeater range check. */
 export function isSkywarn(id: string): boolean {
   return id === "skywarn";
 }
 
+/** Whether this type is a repeater range check. */
 export function isRangeCheck(id: string): boolean {
   return activityTypeDef(id).rangeCheck === true;
 }

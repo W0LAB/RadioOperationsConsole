@@ -40,11 +40,13 @@ describe("ActivityStateControls", () => {
     expect(screen.getByRole("button", { name: "Start net" })).toBeInTheDocument();
   });
 
-  it("shows no start or end for a station log", () => {
-    for (const state of ["scheduled", "active"]) {
-      const { container, unmount } = show(activity("station_log", state));
-      expect(container).toBeEmptyDOMElement();
-      unmount();
+  it("shows no start or end for a station log or range check", () => {
+    for (const type of ["station_log", "range_check"]) {
+      for (const state of ["scheduled", "active"]) {
+        const { container, unmount } = show(activity(type, state));
+        expect(container).toBeEmptyDOMElement();
+        unmount();
+      }
     }
   });
 

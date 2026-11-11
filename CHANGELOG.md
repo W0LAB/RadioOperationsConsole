@@ -6,6 +6,12 @@ top. Each release's section here is also its description on the
 
 ## [Unreleased]
 
+**What works differently:**
+- A range check is now taken like a station log instead of run as a net.
+  There's no Start or End, no date or time, and saving a check-in no longer
+  asks to start the net. Open range checks are listed with station logs
+  under **Logs** (the section was called Station logs).
+
 ## [2.10.0] - 2026-10-25
 
 **What works differently:**

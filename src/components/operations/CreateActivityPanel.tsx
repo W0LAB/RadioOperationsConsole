@@ -3,7 +3,7 @@ import * as api from "../../api";
 import type { Activity, EventRecord, Operator, Repeater } from "../../types";
 import type { ActivityPrefill } from "./activityPrefill";
 import ActivityForm, { type ActivityDraft, type ActivityPlace } from "./ActivityForm";
-import { DEFAULT_ACTIVITY_TYPE, isLog, isRangeCheck } from "../../activityTypes";
+import { DEFAULT_ACTIVITY_TYPE, isOngoing, isRangeCheck } from "../../activityTypes";
 import { combineScheduledAt, todayIso } from "../../utils";
 import { CirclePlus } from "lucide-react";
 
@@ -121,12 +121,12 @@ export default function CreateActivityPanel({
     const id = await api.createActivity(
       draft.title.trim(),
       draft.type,
-      // A station log is ongoing: it has no date.
-      isLog(draft.type) ? null : combineScheduledAt(draft.date, draft.time) || null,
+      // A station log or range check is ongoing: it has no date.
+      isOngoing(draft.type) ? null : combineScheduledAt(draft.date, draft.time) || null,
       draft.frequency.trim() || null,
       operatorId || null
     );
-    if (!isLog(draft.type) && draft.eventId) {
+    if (!isOngoing(draft.type) && draft.eventId) {
       await api.setActivityEvent(id, draft.eventId, operatorId || null).catch(() => {});
     }
     const where = draft.location ?? operatorLocation;

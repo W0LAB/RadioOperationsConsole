@@ -46,7 +46,7 @@ or end, and each record is a contact carrying its radio details.
   or edited; it is saved with none. Changing an activity's type to station
   log clears its date (the earlier date stays in its history).
 - **LOG-005:** The Activities list MUST list open station logs in their own
-  **Station logs** section, alphabetically, marked *Log*; a closed one is
+  **Logs** section (shared with range checks, `RANGE-004`), alphabetically, marked *Log*; a closed one is
   under *Closed* (see `UX-OPS-016`).
 
 ## Contacts

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as api from "../../api";
 import type { Activity } from "../../types";
-import { isLog } from "../../activityTypes";
+import { isOngoing } from "../../activityTypes";
 import { scheduledDate } from "../../activityList";
 import { splitScheduledAt } from "../../utils";
 import { TriangleAlert } from "lucide-react";
@@ -30,7 +30,7 @@ export function clearNotYet() {
  * early check-ins aren't asked each time, but the net beginning is.
  */
 export function shouldAskToStart(activity: Activity, now = Date.now()): boolean {
-  if (activity.state !== "scheduled" || isLog(activity.activity_type)) return false;
+  if (activity.state !== "scheduled" || isOngoing(activity.activity_type)) return false;
   const last = notYetAt.get(activity.id);
   if (last == null) return true;
   const due = splitScheduledAt(activity.scheduled_at).time ? scheduledDate(activity)?.getTime() : undefined;

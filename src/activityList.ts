@@ -1,10 +1,10 @@
 /**
  * The Activities list, under All activities in the side bar (UX-OPS-015): every
  * activity, in sections in the order things happen — open now, each event,
- * coming up, station logs, closed — or found by searching.
+ * coming up, logs (station logs, range checks), closed — or found by searching.
  */
 import type { Activity } from "./types";
-import { activityTypeLabel, isLog, isRelay } from "./activityTypes";
+import { activityTypeLabel, isLog, isOngoing, isRelay } from "./activityTypes";
 import { pad2, splitScheduledAt } from "./utils";
 
 /** green: open; amber: not started though its time has come; dim: closed, logs, later nets. */
@@ -12,7 +12,7 @@ export type StateTone = "open" | "due" | "plain" | "dim";
 
 export interface ActivityRow {
   activity: Activity;
-  /** When it ran or is to run ("Mon 10/5 17:46"), or "" for a station log. */
+  /** When it ran or is to run ("Mon 10/5 17:46"), or "" for a station log or range check. */
   when: string;
   state: string;
   tone: StateTone;
@@ -60,7 +60,7 @@ const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDat
  * corrected, or deleted without crowding today's nets.
  */
 export function isStale(a: Activity, now: Date): boolean {
-  if (a.state !== "scheduled" || isLog(a.activity_type)) return false;
+  if (a.state !== "scheduled" || isOngoing(a.activity_type)) return false;
   const d = scheduledDate(a);
   return d != null && startOfDay(d) < startOfDay(now);
 }
@@ -82,7 +82,7 @@ export function recordText(a: Activity): string {
 
 /** One activity as a row of the table. */
 export function activityRow(a: Activity, now: Date): ActivityRow {
-  if (isLog(a.activity_type)) {
+  if (isOngoing(a.activity_type)) {
     return a.state === "closed"
       ? { activity: a, when: "", state: "Closed", tone: "dim" }
       : { activity: a, when: "", state: "Log", tone: "plain" };
@@ -109,14 +109,14 @@ const byTitle = (x: Activity, y: Activity) => x.title.localeCompare(y.title, und
 
 /**
  * Open (latest started first), then not started (soonest first, unscheduled
- * last), then station logs, then nets whose day passed without starting
+ * last), then logs (station logs, range checks), then nets whose day passed without starting
  * (most recent first).
  */
 function current(acts: Activity[], now: Date): Activity[] {
-  const open = acts.filter((a) => a.state === "active" && !isLog(a.activity_type));
+  const open = acts.filter((a) => a.state === "active" && !isOngoing(a.activity_type));
   const stale = acts.filter((a) => isStale(a, now));
-  const upcoming = acts.filter((a) => a.state === "scheduled" && !isLog(a.activity_type) && !isStale(a, now));
-  const logs = acts.filter((a) => isLog(a.activity_type) && a.state !== "closed");
+  const upcoming = acts.filter((a) => a.state === "scheduled" && !isOngoing(a.activity_type) && !isStale(a, now));
+  const logs = acts.filter((a) => isOngoing(a.activity_type) && a.state !== "closed");
   open.sort((x, y) => time(y.opened_at) - time(x.opened_at));
   upcoming.sort((x, y) => {
     const [dx, dy] = [scheduledDate(x)?.getTime(), scheduledDate(y)?.getTime()];
@@ -169,16 +169,16 @@ function eventSummary(acts: Activity[], now: Date): string {
  * The Activities list's sections, in the order things happen (UX-OPS-015):
  * Open now; each event still going, as its own block in running order (one
  * under way first); Coming up (soonest first, unscheduled, then nets whose
- * day passed without starting); Station logs; Closed (most recent
+ * day passed without starting); Logs (station logs and range checks); Closed (most recent
  * first, folded); and events that are over (latest first, folded). An
  * event's activities are only in its block. Empty sections are left out.
  */
 export function activitySections(acts: Activity[], now: Date): ActivitySection[] {
   const byEvent = new Map<string, Activity[]>();
   for (const a of acts) {
-    if (a.event_id && !isLog(a.activity_type)) byEvent.set(a.event_id, [...(byEvent.get(a.event_id) ?? []), a]);
+    if (a.event_id && !isOngoing(a.activity_type)) byEvent.set(a.event_id, [...(byEvent.get(a.event_id) ?? []), a]);
   }
-  const loose = acts.filter((a) => !a.event_id || isLog(a.activity_type));
+  const loose = acts.filter((a) => !a.event_id || isOngoing(a.activity_type));
   const row = (a: Activity) => activityRow(a, now);
   const section = (id: string, title: string, list: Activity[], folded = false): ActivitySection => ({
     id,
@@ -213,10 +213,10 @@ export function activitySections(acts: Activity[], now: Date): ActivitySection[]
 
   const now_ = current(loose, now);
   return [
-    section("open", "Open now", now_.filter((a) => a.state === "active" && !isLog(a.activity_type))),
+    section("open", "Open now", now_.filter((a) => a.state === "active" && !isOngoing(a.activity_type))),
     ...going.map((e) => e.section),
-    section("upcoming", "Coming up", now_.filter((a) => a.state === "scheduled" && !isLog(a.activity_type))),
-    section("logs", "Station logs", now_.filter((a) => isLog(a.activity_type))),
+    section("upcoming", "Coming up", now_.filter((a) => a.state === "scheduled" && !isOngoing(a.activity_type))),
+    section("logs", "Logs", now_.filter((a) => isOngoing(a.activity_type))),
     section("closed", "Closed", closed(loose), true),
     ...over.map((e) => e.section),
   ].filter((s) => s.rows.length > 0);

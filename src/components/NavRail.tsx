@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { TABS, type Activity, type Tab } from "../types";
 import { TAB_ICONS } from "../tabIcons";
 import { activityRow, recordText } from "../activityList";
-import { isLog } from "../activityTypes";
+import { isOngoing } from "../activityTypes";
 import { useMinuteClock } from "../hooks/useMinuteClock";
 import ActivityTypeIcon from "./ActivityTypeIcon";
 import { ChevronsLeft, ChevronsRight, ListChecks } from "lucide-react";
@@ -62,7 +62,7 @@ function saveCollapsed(collapsed: boolean) {
  */
 export function railActivities(activities: Activity[], selectedId: string | null): Activity[] {
   const open = activities
-    .filter((a) => a.state === "active" && !isLog(a.activity_type))
+    .filter((a) => a.state === "active" && !isOngoing(a.activity_type))
     .sort((x, y) => y.opened_at.localeCompare(x.opened_at));
   const selected = activities.find((a) => a.id === selectedId);
   return selected && !open.includes(selected) ? [...open, selected] : open;

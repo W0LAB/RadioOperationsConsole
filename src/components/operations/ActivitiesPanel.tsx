@@ -79,7 +79,7 @@ function Row({
  * Every activity, under All activities in the side bar (UX-OPS-015,
  * UX-032), as one table across the page, in sections in the order things
  * happen: open now, each event as a block in running order, coming up,
- * station logs, and closed (folded). Clicking one selects it; the side bar's
+ * logs, and closed (folded). Clicking one selects it; the side bar's
  * open nets and the top bar's Activity list stay the quick ways to switch
  * from any tab.
  */

@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import type { Activity, ActivitySummary } from "../../types";
 import { formatDuration } from "../../export";
-import { isLog, visibleSections } from "../../activityTypes";
+import { isOngoing, visibleSections } from "../../activityTypes";
 import { weatherLines } from "../../netWeather";
 import { stormLines } from "../../summaryFacts";
 import { pad2 } from "../../utils";
@@ -78,7 +78,7 @@ export function SummaryView({
   notes: string;
 }) {
   const shown = visibleSections(activity.activity_type, summary);
-  const log = isLog(activity.activity_type);
+  const log = isOngoing(activity.activity_type);
   const ended = summary.closed_at || "";
   const duration = summary.opened_at
     ? formatDuration(summary.opened_at, ended || new Date().toISOString())
@@ -141,7 +141,7 @@ export function SummaryView({
           )}
         </Row>
       )}
-      {/* A station log stays open for days, so its start, end and weather mean little. */}
+      {/* An ongoing activity (station log, range check) is never started or ended, so its start, end and weather mean little. */}
       {!log && (
         <>
           <Row label="Started">

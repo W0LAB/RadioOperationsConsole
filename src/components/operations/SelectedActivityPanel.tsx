@@ -5,7 +5,7 @@ import ActivitySummaryPanel from "./ActivitySummaryPanel";
 import type { ActivityRepeater } from "./ActivityRepeaterField";
 import ActivityForm, { type ActivityDraft } from "./ActivityForm";
 import { operatorPlace } from "./CreateActivityPanel";
-import { activityTypeLabel, isLog, isRangeCheck } from "../../activityTypes";
+import { activityTypeLabel, isOngoing, isRangeCheck } from "../../activityTypes";
 import DeleteActivityDialog from "../lifecycle/DeleteActivityDialog";
 import { formatCoordsWithGrid } from "../../geo";
 import { combineScheduledAt, formatContactTime, parseContactTime, splitScheduledAt } from "../../utils";
@@ -135,8 +135,8 @@ export default function SelectedActivityPanel({
         focusedActivity.id,
         title,
         editType,
-        // A station log is ongoing: it has no date (the earlier one stays in its history).
-        isLog(editType) ? null : combineScheduledAt(editDate, editTime) || null,
+        // A station log or range check is ongoing: it has no date (the earlier one stays in its history).
+        isOngoing(editType) ? null : combineScheduledAt(editDate, editTime) || null,
         editFrequency.trim() || null,
         selectedOperatorId
       );
@@ -155,7 +155,7 @@ export default function SelectedActivityPanel({
           await api.clearActivityLocation(focusedActivity.id);
         }
       }
-      const eventId = isLog(editType) ? "" : draft.eventId;
+      const eventId = isOngoing(editType) ? "" : draft.eventId;
       if (eventId !== focusedActivity.event_id) {
         await api.setActivityEvent(focusedActivity.id, eventId || null, selectedOperatorId);
       }

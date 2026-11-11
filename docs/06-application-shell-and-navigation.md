@@ -179,7 +179,7 @@ operators, repeaters, and places on the right. The top bar's Activity list
   running order, headed by its name with its day and progress beside it ("Mon
   10/5 · 1 open · 2 to go · 1 done", green while under way; `EVT-021`);
   **Coming up** (soonest first, unscheduled after, then nets whose day passed
-  without being started, marked "3 wk ago" in amber); **Station logs** (`LOG-005`);
+  without being started, marked "3 wk ago" in amber); **Logs** (`LOG-005`, `RANGE-004`);
   **Closed** (most recent first); and events that are over.
   Section headings MUST be light (small text, no heavy rules). Closed
   and events that are over MUST start folded; folding MUST be remembered on

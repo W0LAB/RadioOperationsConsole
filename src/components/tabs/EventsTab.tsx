@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import * as api from "../../api";
 import type { Activity, EventRecord, Operator } from "../../types";
-import { activityTypeLabel, isLog } from "../../activityTypes";
+import { activityTypeLabel, isOngoing } from "../../activityTypes";
 import { eventSpan, eventStatus, startMs } from "../../events";
 import { localDate, localTime } from "../../icsForms";
 import Ics214Dialog from "../exports/Ics214Dialog";
@@ -81,7 +81,7 @@ export default function EventsTab({
   const acts = selected
     ? [...of(selected.id)].sort((x, y) => (startMs(x) ?? Infinity) - (startMs(y) ?? Infinity))
     : [];
-  const free = activities.filter((a) => !a.event_id && !isLog(a.activity_type));
+  const free = activities.filter((a) => !a.event_id && !isOngoing(a.activity_type));
   const defaultOperator = operators.find((o) => o.id === defaultOperatorId) ?? null;
 
   useEffect(() => {

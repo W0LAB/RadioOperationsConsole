@@ -4,7 +4,7 @@ import { formatCoordsWithGrid } from "../../geo";
 import LocationPicker from "../LocationPicker";
 import ActivityTypeSelect from "./ActivityTypeSelect";
 import ActivityRepeaterField, { type ActivityRepeater } from "./ActivityRepeaterField";
-import { isLog, isRangeCheck, isRelay } from "../../activityTypes";
+import { isLog, isOngoing, isRangeCheck, isRelay } from "../../activityTypes";
 
 export interface ActivityPlace {
   label: string;
@@ -154,9 +154,9 @@ export default function ActivityForm({
             </select>
           </Field>
         )}
-        {/* Only once events exist, and never for a station log (it's ongoing). Activities
+        {/* Only once events exist, and never for an ongoing activity (station log, range check). Activities
             are usually added to an event from its page on the Events tab. */}
-        {events.length > 0 && !isLog(draft.type) && (
+        {events.length > 0 && !isOngoing(draft.type) && (
           <Field label="Event">
             <select value={draft.eventId} onChange={(e) => onChange({ eventId: e.target.value })}>
               <option value="">(none)</option>
@@ -172,8 +172,8 @@ export default function ActivityForm({
         {rangeCheck && repeaterField}
       </Section>
 
-      {/* A station log is ongoing, so it has no date or time. */}
-      {!isLog(draft.type) && (
+      {/* A station log or range check is ongoing, so it has no date or time. */}
+      {!isOngoing(draft.type) && (
         <Section title="When">
           <Field label="Date">{text("date", "YYYY-MM-DD")}</Field>
           <Field label="Time">{text("time", "19:00 (optional)")}</Field>
