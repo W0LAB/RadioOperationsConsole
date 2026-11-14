@@ -6,6 +6,8 @@ top. Each release's section here is also its description on the
 
 ## [Unreleased]
 
+## [2.10.2] - 2026-11-13
+
 **What works differently:**
 - In **Nets**, a net that meets five days a week or more is listed once,
   under a new **Daily** heading above the week, with its days beside its
@@ -801,7 +803,8 @@ This version updates the database: once it's run, 2.6.0 can't open the data.
 
 The first release.
 
-[Unreleased]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.1...HEAD
+[Unreleased]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.2...HEAD
+[2.10.2]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.9.1...v2.10.0
 [2.9.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.9.0...v2.9.1
