@@ -7,7 +7,6 @@ authors = ["l0g-lab"]
 license = "GPL-3.0-or-later"
 description = "Offline-first desktop app for amateur-radio nets, emergency communications and SKYWARN"
 repository = "https://github.com/l0g-lab/RadioOperationsConsole"
-homepage = "https://github.com/l0g-lab/RadioOperationsConsole"
 publish = false
 
 [build-dependencies]

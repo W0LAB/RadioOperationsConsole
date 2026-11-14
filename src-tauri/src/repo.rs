@@ -1093,7 +1093,6 @@ impl Repository {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_arguments)]
     pub fn create_spotter_report(
         &self,
         activity_id: &str,
