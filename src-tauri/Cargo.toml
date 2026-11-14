@@ -3,10 +3,10 @@ name = "radio_ops_console"
 version = "2.10.2"
 edition = "2021"
 rust-version = "1.88"
-authors = ["l0g-lab"]
+authors = ["W0LAB"]
 license = "GPL-3.0-or-later"
 description = "Offline-first desktop app for amateur-radio nets, emergency communications and SKYWARN"
-repository = "https://github.com/l0g-lab/RadioOperationsConsole"
+repository = "https://github.com/W0LAB/RadioOperationsConsole"
 publish = false
 
 [build-dependencies]

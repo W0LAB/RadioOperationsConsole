@@ -4,7 +4,7 @@
   "version": "2.10.2",
   "description": "Offline-first desktop app for amateur-radio nets, emergency communications and SKYWARN",
   "license": "GPL-3.0-or-later",
-  "repository": "github:l0g-lab/RadioOperationsConsole",
+  "repository": "github:W0LAB/RadioOperationsConsole",
   "type": "module",
   "scripts": {
     "dev": "vite",

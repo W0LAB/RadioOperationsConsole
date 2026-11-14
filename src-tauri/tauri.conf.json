@@ -49,10 +49,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "publisher": "l0g-lab",
-    "copyright": "Copyright © 2026 l0g-lab. Licensed under the GPL-3.0-or-later.",
+    "publisher": "W0LAB",
+    "copyright": "Copyright © 2026 W0LAB. Licensed under the GPL-3.0-or-later.",
     "license": "GPL-3.0-or-later",
-    "homepage": "https://github.com/l0g-lab/RadioOperationsConsole",
+    "homepage": "https://github.com/W0LAB/RadioOperationsConsole",
     "category": "Utility",
     "shortDescription": "Offline-first logging for amateur-radio nets, emcomm and SKYWARN",
     "longDescription": "Radio Operations Console is an offline-first desktop app for running amateur-radio nets, emergency communications activations, exercises and SKYWARN operations: rapid check-ins, traffic, spotter reports, range checks, a repeater directory and net listings, maps, NWS alerts and radar, and ICS-309/213 forms for Winlink.",

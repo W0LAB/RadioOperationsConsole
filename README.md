@@ -88,7 +88,7 @@ Open a **new** terminal afterwards so the tools are on your PATH.
 ### 2. Get the code and start it
 
 ```bash
-git clone https://github.com/l0g-lab/RadioOperationsConsole.git
+git clone https://github.com/W0LAB/RadioOperationsConsole.git
 cd RadioOperationsConsole
 npm install
 npm run tauri dev
@@ -181,6 +181,6 @@ The product and engineering specification the app is built from is in [docs/](do
 
 ## Credits
 
-Created and maintained by [l0g-lab](https://github.com/l0g-lab). Contributions from the amateur-radio community are welcome.
+Created and maintained by [W0LAB](https://github.com/W0LAB). Contributions from the amateur-radio community are welcome.
 
 The bundled [Atkinson Hyperlegible](https://www.brailleinstitute.org/freefont/) font is © Braille Institute of America, used under the [SIL Open Font License 1.1](https://openfontlicense.org).

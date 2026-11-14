@@ -2,7 +2,7 @@
 
 What changed in each release of Radio Operations Console. The newest is at the
 top. Each release's section here is also its description on the
-[Releases page](https://github.com/l0g-lab/RadioOperationsConsole/releases).
+[Releases page](https://github.com/W0LAB/RadioOperationsConsole/releases).
 
 ## [Unreleased]
 
@@ -803,35 +803,35 @@ This version updates the database: once it's run, 2.6.0 can't open the data.
 
 The first release.
 
-[Unreleased]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.2...HEAD
-[2.10.2]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.1...v2.10.2
-[2.10.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.10.0...v2.10.1
-[2.10.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.9.1...v2.10.0
-[2.9.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.9.0...v2.9.1
-[2.9.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.8.0...v2.9.0
-[2.8.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.7.0...v2.8.0
-[2.7.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.6.0...v2.7.0
-[2.6.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.5.4...v2.6.0
-[2.5.4]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.5.3...v2.5.4
-[2.5.3]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.5.2...v2.5.3
-[2.5.2]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.5.1...v2.5.2
-[2.5.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.5.0...v2.5.1
-[2.5.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.4.2...v2.5.0
-[2.4.2]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.4.1...v2.4.2
-[2.4.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.4.0...v2.4.1
-[2.4.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.3.1...v2.4.0
-[2.3.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.3.0...v2.3.1
-[2.3.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.2.2...v2.3.0
-[2.2.2]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.2.1...v2.2.2
-[2.2.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.2.0...v2.2.1
-[2.2.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.1.0...v2.2.0
-[2.1.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.0.1...v2.1.0
-[2.0.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v2.0.0...v2.0.1
-[2.0.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v1.3.0...v2.0.0
-[1.3.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v1.2.1...v1.3.0
-[1.2.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v1.1.2...v1.2.0
-[1.1.2]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v1.1.1...v1.1.2
-[1.1.1]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/l0g-lab/RadioOperationsConsole/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/l0g-lab/RadioOperationsConsole/releases/tag/v1.0.0
+[Unreleased]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.2...HEAD
+[2.10.2]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.1...v2.10.2
+[2.10.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.0...v2.10.1
+[2.10.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.9.1...v2.10.0
+[2.9.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.9.0...v2.9.1
+[2.9.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.8.0...v2.9.0
+[2.8.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.7.0...v2.8.0
+[2.7.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.6.0...v2.7.0
+[2.6.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.5.4...v2.6.0
+[2.5.4]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.5.3...v2.5.4
+[2.5.3]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.5.2...v2.5.3
+[2.5.2]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.5.1...v2.5.2
+[2.5.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.5.0...v2.5.1
+[2.5.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.4.2...v2.5.0
+[2.4.2]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.4.1...v2.4.2
+[2.4.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.4.0...v2.4.1
+[2.4.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.3.1...v2.4.0
+[2.3.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.3.0...v2.3.1
+[2.3.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.2.2...v2.3.0
+[2.2.2]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.2.1...v2.2.2
+[2.2.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.2.0...v2.2.1
+[2.2.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.1.0...v2.2.0
+[2.1.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.0.1...v2.1.0
+[2.0.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.0.0...v2.0.1
+[2.0.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v1.3.0...v2.0.0
+[1.3.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v1.2.1...v1.3.0
+[1.2.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v1.1.2...v1.2.0
+[1.1.2]: https://github.com/W0LAB/RadioOperationsConsole/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/W0LAB/RadioOperationsConsole/releases/tag/v1.0.0

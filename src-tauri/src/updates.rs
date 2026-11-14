@@ -11,7 +11,7 @@ use std::time::Duration;
 
 /// The newest published release (drafts and pre-releases are never "latest").
 const LATEST_RELEASE: &str =
-    "https://api.github.com/repos/l0g-lab/RadioOperationsConsole/releases/latest";
+    "https://api.github.com/repos/W0LAB/RadioOperationsConsole/releases/latest";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);

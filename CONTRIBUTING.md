@@ -7,7 +7,7 @@ under pressure, and fully usable offline.
 
 ## Reporting a problem or suggesting a feature
 
-Open an [issue](https://github.com/l0g-lab/RadioOperationsConsole/issues/new/choose).
+Open an [issue](https://github.com/W0LAB/RadioOperationsConsole/issues/new/choose).
 For a bug, say what you did, what you expected, what happened, your version
 (shown at the bottom of Settings), and your platform. Please
 report security problems privately instead — see [SECURITY.md](SECURITY.md).

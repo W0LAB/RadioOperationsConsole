@@ -26,7 +26,7 @@ const UPDATE: UpdateInfo = {
   version: "1.4.0",
   current_version: "1.3.0",
   notes: "New things",
-  release_url: "https://github.com/l0g-lab/RadioOperationsConsole/releases/tag/v1.4.0",
+  release_url: "https://github.com/W0LAB/RadioOperationsConsole/releases/tag/v1.4.0",
   installer: { name: "Radio.Operations.Console_1.4.0_amd64.deb", size: 200 },
 };
 

@@ -342,7 +342,7 @@ function AppVersion() {
             : null;
   return (
     <p className="app-version settings-hint">
-      Radio Operations Console {version} · GPL-3.0-or-later · github.com/l0g-lab/RadioOperationsConsole ·{" "}
+      Radio Operations Console {version} · GPL-3.0-or-later · github.com/W0LAB/RadioOperationsConsole ·{" "}
       <button
         className="link-button"
         onClick={() => checkForUpdate(true)}

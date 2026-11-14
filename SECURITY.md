@@ -6,7 +6,7 @@ If you find a security problem — for example a way for something on a map,
 in an APRS feed, or in a downloaded file to run code, or to read or write
 files the operator didn't choose — please don't open a public issue. Report
 it privately through GitHub's
-[security advisories](https://github.com/l0g-lab/RadioOperationsConsole/security/advisories/new),
+[security advisories](https://github.com/W0LAB/RadioOperationsConsole/security/advisories/new),
 with what you found, how to reproduce it, and the version and platform.
 
 You'll get an answer as soon as practical. This is a volunteer project, so
