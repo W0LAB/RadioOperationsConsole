@@ -6,6 +6,16 @@ top. Each release's section here is also its description on the
 
 ## [Unreleased]
 
+**What works differently:**
+- In **Nets**, a net that meets five days a week or more is listed once,
+  under a new **Daily** heading above the week, with its days beside its
+  name ("Mon–Fri"), instead of under every day. Each weekday now shows only
+  the nets that set it apart.
+- Each heading in the Nets week folds. Today and Daily start open; the other
+  days and As needed start folded, showing how many nets they hold and on
+  which bands ("Tuesday · 6 nets · 2m, 70cm"). Whatever you open or fold
+  stays that way on this computer. Searching opens every day with a match.
+
 ## [2.10.1] - 2026-11-10
 
 **What works differently:**

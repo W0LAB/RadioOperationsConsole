@@ -2776,6 +2776,44 @@ button.online-pill-working-offline:hover {
   letter-spacing: 0.05em;
 }
 
+/* The heading folds its section (NETL-027); it keeps the heading's look. */
+.net-day-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.net-day-chevron {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+/* "· 6 nets · 2m, 70cm": in plain case, quieter than the day. */
+.net-day-summary {
+  color: var(--text-dim);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: pre;
+}
+
+/* Folded days sit close together. */
+.net-day-folded .net-day-heading {
+  margin-bottom: 0;
+}
+
 .net-run-section {
   display: flex;
   flex-wrap: wrap;

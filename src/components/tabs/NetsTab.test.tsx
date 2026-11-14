@@ -72,6 +72,11 @@ function renderTab(onStart: (p: unknown) => void = () => {}) {
 }
 
 const day = (label: string) => screen.getByRole("region", { name: label });
+/** Opens a folded section by its heading (NETL-027). */
+async function unfold(user: ReturnType<typeof userEvent.setup>, label: string) {
+  const toggle = within(day(label)).getByRole("button", { expanded: false });
+  await user.click(toggle);
+}
 const rowIn = (region: HTMLElement, name: string) =>
   within(region).getByText(name).closest(".net-row") as HTMLElement;
 
@@ -87,40 +92,67 @@ describe("NetsTab", () => {
       Promise.resolve(retired ? [] : [W4ABC])
     );
     vi.mocked(api.saveNetListing).mockClear();
+    localStorage.clear();
   });
   afterEach(() => vi.useRealTimers());
 
-  it("lists the week ahead one day at a time, each net under every day it meets (NETL-020)", async () => {
+  it("lists the week ahead one day at a time, daily nets once, each other net under every day it meets (NETL-020)", async () => {
+    const user = userEvent.setup();
     renderTab();
-    await screen.findAllByText("Tuesday Night Net");
-    // Sunday to Saturday; days without nets are left out.
+    await screen.findAllByText("Morning Net");
+    // Daily first, then Sunday to Saturday; days without nets are left out.
     expect(screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"))).toEqual([
-      "Monday",
+      "Daily",
       "Tuesday",
-      "Wednesday",
       "Thursday",
-      "Friday",
       "As needed",
     ]);
-    // Today is marked, and its 07:00 net, already over, stays listed, dimmed.
-    expect(day("Friday")).toHaveAttribute("aria-current", "date");
-    expect(rowIn(day("Friday"), "Morning Net")).toHaveClass("net-row-over");
+    // The Mon–Fri net is listed once, with its days; today's run, already over, dimmed.
+    expect(screen.getAllByText("Morning Net")).toHaveLength(1);
+    const morning = rowIn(day("Daily"), "Morning Net");
+    expect(within(morning).getByText("Mon–Fri")).toBeInTheDocument();
+    expect(morning).toHaveClass("net-row-over");
     // A monthly net sits under its weekday with which weeks it meets.
+    await unfold(user, "Thursday");
     expect(within(rowIn(day("Thursday"), "County ARES Net")).getByText("2nd & 4th")).toBeInTheDocument();
-    const tuesday = day("Tuesday");
-    expect(within(tuesday).getAllByText(/Net$/, { selector: ".net-row-name" }).map((e) => e.textContent)).toEqual([
-      "Morning Net",
-      "Tuesday Night Net",
-    ]);
-    expect(within(day("Monday")).getByText("Morning Net")).toBeInTheDocument();
-    expect(within(day("Thursday")).getByText("County ARES Net")).toBeInTheDocument();
+    await unfold(user, "As needed");
     expect(within(day("As needed")).getByText("SKYWARN Net")).toBeInTheDocument();
+  });
+
+  it("folds days other than today, saying how many nets and on which bands (NETL-027)", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderTab();
+    await screen.findAllByText("Morning Net");
+    const tuesday = day("Tuesday");
+    expect(within(tuesday).queryByText("Tuesday Night Net")).not.toBeInTheDocument();
+    expect(within(tuesday).getByRole("button", { expanded: false })).toHaveTextContent("Tuesday · 1 net · 2m");
+    expect(within(day("Daily")).getByRole("button", { expanded: true })).toBeInTheDocument();
+
+    // Opening a day is remembered on this computer.
+    await unfold(user, "Tuesday");
+    expect(within(day("Tuesday")).getByText("Tuesday Night Net")).toBeInTheDocument();
+    unmount();
+    renderTab();
+    await screen.findAllByText("Tuesday Night Net");
+    expect(within(day("Tuesday")).getByRole("button", { expanded: true })).toBeInTheDocument();
+  });
+
+  it("opens every section with a match while searching", async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await screen.findAllByText("Morning Net");
+    await user.type(screen.getByLabelText("Search nets"), "ARES Net");
+    expect(within(day("Thursday")).getByText("County ARES Net")).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Search nets"));
+    expect(within(day("Thursday")).queryByText("County ARES Net")).not.toBeInTheDocument();
   });
 
   it("shows each meeting on a line, the rest behind ⓘ (NETL-021)", async () => {
     const user = userEvent.setup();
     renderTab();
-    await screen.findAllByText("Tuesday Night Net");
+    await screen.findAllByText("Morning Net");
+    await unfold(user, "Tuesday");
+    await unfold(user, "As needed");
     const row = rowIn(day("Tuesday"), "Tuesday Night Net");
     expect(within(row).getByText("19:00–19:30")).toBeInTheDocument();
     expect(within(row).getByText("W4ABC Orlando")).toBeInTheDocument();
@@ -141,7 +173,7 @@ describe("NetsTab", () => {
   it("lists only the nets on now or starting within 12 hours (NETL-025)", async () => {
     vi.setSystemTime(new Date(2026, 9, 5, 6, 40)); // Monday 06:40, 20 minutes before the Morning Net
     renderTab();
-    await screen.findAllByText("Tuesday Night Net");
+    await screen.findAllByText("Morning Net");
     const box = screen.getByRole("region", { name: "Coming up" });
     const rows = [...box.querySelectorAll(".net-coming-row")].map((r) => [
       r.querySelector(".net-coming-when")?.textContent,
@@ -153,14 +185,14 @@ describe("NetsTab", () => {
 
   it("leaves Coming up out when no net is on or within 12 hours", async () => {
     renderTab(); // Friday 09:00: the next net is Monday
-    await screen.findAllByText("Tuesday Night Net");
+    await screen.findAllByText("Morning Net");
     expect(screen.queryByRole("region", { name: "Coming up" })).not.toBeInTheDocument();
   });
 
   it("searches and filters by repeater (NETL-022)", async () => {
     const user = userEvent.setup();
     renderTab();
-    await screen.findAllByText("Tuesday Night Net");
+    await screen.findAllByText("Morning Net");
     await user.type(screen.getByLabelText("Search nets"), "147.000");
     expect(screen.getByText("SKYWARN Net")).toBeInTheDocument();
     expect(screen.queryByText("Tuesday Night Net")).not.toBeInTheDocument();
@@ -174,7 +206,9 @@ describe("NetsTab", () => {
     const user = userEvent.setup();
     const onStart = vi.fn();
     renderTab(onStart);
-    await screen.findAllByText("Tuesday Night Net");
+    await screen.findAllByText("Morning Net");
+    await unfold(user, "Tuesday");
+    await unfold(user, "As needed");
     await user.click(within(rowIn(day("Tuesday"), "Tuesday Night Net")).getByRole("button", { name: /^Start activity for/ }));
     expect(onStart).toHaveBeenCalledWith({
       title: "Tuesday Night Net",
@@ -184,8 +218,9 @@ describe("NetsTab", () => {
       frequency: "146.940 -0.600 PL 100.0",
       repeater: { name: "W4ABC Orlando", lat: 28.54, lon: -81.38 },
     });
-    await user.click(within(rowIn(day("Wednesday"), "Morning Net")).getByRole("button", { name: /^Start activity for/ }));
-    expect(onStart).toHaveBeenLastCalledWith(expect.objectContaining({ date: "2026-10-07" }));
+    // A daily net starts at its next meeting: Friday's is over, so Monday.
+    await user.click(within(rowIn(day("Daily"), "Morning Net")).getByRole("button", { name: /^Start activity for/ }));
+    expect(onStart).toHaveBeenLastCalledWith(expect.objectContaining({ date: "2026-10-05" }));
     await user.click(within(rowIn(day("As needed"), "SKYWARN Net")).getByRole("button", { name: /^Start activity for/ }));
     expect(onStart).toHaveBeenLastCalledWith(
       expect.objectContaining({ date: "2026-10-02", time: "", frequency: "147.000", repeater: null })
@@ -196,8 +231,8 @@ describe("NetsTab", () => {
     const user = userEvent.setup();
     renderTab();
     await screen.findAllByText("Morning Net");
-    await user.click(within(day("Monday")).getByRole("button", { name: "Show details of Morning Net" }));
-    await user.click(within(day("Monday")).getByRole("button", { name: "Edit Morning Net" }));
+    await user.click(within(day("Daily")).getByRole("button", { name: "Show details of Morning Net" }));
+    await user.click(within(day("Daily")).getByRole("button", { name: "Edit Morning Net" }));
     expect(screen.getAllByRole("button", { name: "Save net" })).toHaveLength(1);
     expect(screen.getByLabelText("Net name")).toHaveValue("Morning Net");
   });
@@ -205,7 +240,7 @@ describe("NetsTab", () => {
   it("adds a monthly net, refusing it until days and weeks are chosen (NETL-003, NETL-004, NETL-006)", async () => {
     const user = userEvent.setup();
     renderTab();
-    await screen.findAllByText("Tuesday Night Net");
+    await screen.findAllByText("Morning Net");
     await user.click(screen.getByRole("button", { name: "+ Add net" }));
     await user.type(screen.getByLabelText("Net name"), "Last Sunday Net");
     await user.click(screen.getByRole("radio", { name: "Monthly" }));

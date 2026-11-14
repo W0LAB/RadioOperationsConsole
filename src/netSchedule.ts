@@ -15,6 +15,9 @@ export interface Meeting {
   underway: boolean;
 }
 
+/** A weekly net meeting on this many weekdays or more is listed once, under Daily (NETL-020). */
+export const DAILY_MIN_DAYS = 5;
+
 /** How long a net with no end time counts as under way (NETL-020). */
 const ASSUMED_MINUTES = 60;
 /** Far enough ahead to reach any monthly meeting. */
@@ -96,7 +99,12 @@ export interface WeekDay {
 }
 
 export interface WeekView {
-  /** Sunday to Saturday. */
+  /**
+   * Weekly nets meeting most days (`DAILY_MIN_DAYS` or more), listed once
+   * apart from the days so the days show what sets each apart; by time.
+   */
+  daily: WeekEntry[];
+  /** Sunday to Saturday, without the daily nets. */
   days: WeekDay[];
   /** "As needed" nets, by name. */
   asNeeded: NetListing[];
@@ -125,29 +133,47 @@ function nextOnWeekday(l: NetListingDetails, weekday: number, now: Date): Meetin
   return null;
 }
 
+/** Whether the net is listed once under Daily rather than under each weekday (NETL-020). */
+export function isDaily(l: NetListingDetails): boolean {
+  return l.schedule_kind === "weekly" && l.weekdays.length >= DAILY_MIN_DAYS;
+}
+
 /**
  * The nets by weekday, Sunday to Saturday, so the week looks the same
  * whatever day it is (NETL-020): each net under every weekday it meets on
- * (a monthly net too), by start time. Today is marked; its nets carry
- * today's meeting, and one already over says so.
+ * (a monthly net too), by start time, except those meeting most days, which
+ * are listed once under Daily at their next meeting. Today is marked; its
+ * nets carry today's meeting, and one already over says so.
  */
 export function weekView(listings: NetListing[], now: Date): WeekView {
   const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const scheduled = listings.filter(hasTime);
+  const overToday = (l: NetListing) => meetsOn(l, todayDate) && meetingOn(l, todayDate, now).end <= now;
+  const byTime = (a: WeekEntry, b: WeekEntry) =>
+    a.listing.start_time.localeCompare(b.listing.start_time) || byName(a.listing, b.listing);
+  const daily = scheduled
+    .filter(isDaily)
+    .map((listing) => ({ listing, meeting: nextMeeting(listing, now), overToday: overToday(listing) }))
+    .sort(byTime);
   const days = DAY_NAMES.map((name, weekday) => {
     const today = weekday === now.getDay();
     const entries = scheduled
-      .filter((l) => l.weekdays.includes(weekday))
+      .filter((l) => !isDaily(l) && l.weekdays.includes(weekday))
       .map((listing) => ({
         listing,
         meeting: nextOnWeekday(listing, weekday, now),
-        overToday: today && meetsOn(listing, todayDate) && meetingOn(listing, todayDate, now).end <= now,
+        overToday: today && overToday(listing),
       }))
-      .sort((a, b) => a.listing.start_time.localeCompare(b.listing.start_time) || byName(a.listing, b.listing));
+      .sort(byTime);
     return { weekday, name, today, entries };
   });
   const asNeeded = listings.filter((l) => l.schedule_kind === "as_needed").sort(byName);
-  return { days, asNeeded };
+  return { daily, days, asNeeded };
+}
+
+/** Which days a daily net meets, after its name: "Mon–Fri", "Sun–Thu"; "" every day (NETL-020). */
+export function dailyDays(l: NetListingDetails): string {
+  return isDaily(l) && l.weekdays.length < 7 ? weeklyDays(l.weekdays) : "";
 }
 
 /** Which weeks of the month a monthly net meets: "2nd & 4th", "last"; "" when weekly. */
@@ -194,11 +220,15 @@ export function startsIn(m: Meeting, now: Date): string {
   return `${DAY_SHORT[m.start.getDay()]} ${MONTH_SHORT[m.start.getMonth()]} ${m.start.getDate()} ${hhmm(m.start)}`;
 }
 
-/** "Tuesdays", "Mon–Fri", "Mon, Wed, Fri", "Daily". */
-function weeklyDays(days: number[]): string {
+/** "Tuesdays", "Mon–Fri", "Sun–Thu", "Mon, Wed, Fri", "Daily". */
+function weeklyDays(weekdays: number[]): string {
+  const days = [...weekdays].sort((a, b) => a - b);
   if (days.length === 7) return "Daily";
   if (days.length === 1) return `${DAY_NAMES[days[0]]}s`;
-  if (days.join() === "1,2,3,4,5") return "Mon–Fri";
+  // Three or more days in a row, as a range.
+  if (days.length >= 3 && days.every((d, i) => i === 0 || d === days[i - 1] + 1)) {
+    return `${DAY_SHORT[days[0]]}–${DAY_SHORT[days[days.length - 1]]}`;
+  }
   return days.map((d) => DAY_SHORT[d]).join(", ");
 }
 

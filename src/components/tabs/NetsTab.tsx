@@ -5,20 +5,22 @@ import { haversineKm } from "../../geo";
 import { formatRepeater, tuningDetails } from "../../repeaters";
 import {
   comingUp,
+  dailyDays,
   describeSchedule,
   isoDate,
   monthlyWeeks,
   startsIn,
   weekView,
   type Meeting,
+  type WeekEntry,
 } from "../../netSchedule";
 import NetListingForm, { EMPTY_LISTING } from "../nets/NetListingForm";
 import type { ActivityPrefill } from "../operations/activityPrefill";
 import { shortMiles } from "../checkins/roster/shared";
-import { CalendarClock, Info, Play } from "lucide-react";
+import { CalendarClock, ChevronDown, ChevronRight, Info, Play } from "lucide-react";
 import ActivityTypeIcon from "../ActivityTypeIcon";
 import { useMinuteClock } from "../../hooks/useMinuteClock";
-import { mhzFromText } from "../../bands";
+import { bandOf, mhzFromText } from "../../bands";
 import BandChip from "../BandChip";
 import ShareListControls from "../ShareListControls";
 
@@ -28,6 +30,26 @@ interface Props {
   selectedOperatorId: string | null;
   /** Opens the create-activity form filled from a listing (NETL-030). */
   onStartActivity: (prefill: ActivityPrefill) => void;
+}
+
+const FOLDS_KEY = "roc-net-folds";
+
+/** The sections of the week folded (true) or opened (false) on this computer; others use their default. */
+function loadFolds(): Record<string, boolean> {
+  try {
+    const v = localStorage.getItem(FOLDS_KEY);
+    return v ? (JSON.parse(v) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveFolds(folds: Record<string, boolean>) {
+  try {
+    localStorage.setItem(FOLDS_KEY, JSON.stringify(folds));
+  } catch {
+    // Still applies for this session.
+  }
 }
 
 /** A listing's details, for the form. */
@@ -54,6 +76,13 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
   // Rows with their details open, by day and net.
   const [openRows, setOpenRows] = useState<Set<string>>(new Set());
   const now = useMinuteClock();
+  // Sections folded or opened on this computer (NETL-027); today's and those
+  // while searching are kept for the moment only, not saved.
+  const [folds, setFolds] = useState<Record<string, boolean>>(loadFolds);
+  const [momentFolds, setMomentFolds] = useState<{ context: string; folds: Record<string, boolean> }>({
+    context: "",
+    folds: {},
+  });
 
   function toggleRow(key: string) {
     setOpenRows((prev) => {
@@ -95,6 +124,33 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     );
   });
   const week = weekView(matching, now);
+  const filtering = query !== "" || repeaterFilter !== "";
+  // Fold choices made while searching, or on today, last until the search or the day changes.
+  const momentContext = filtering ? `search:${query}|${repeaterFilter}` : `day:${isoDate(now)}`;
+  const moment = momentFolds.context === momentContext ? momentFolds.folds : {};
+
+  /**
+   * Whether a section is open (NETL-027): today and Daily open, other days
+   * and As needed folded, unless chosen otherwise on this computer; every
+   * section with a match open while searching.
+   */
+  function isOpen(key: string, today: boolean): boolean {
+    const folded = moment[key] ?? (filtering ? false : today ? false : (folds[key] ?? key !== "daily"));
+    return !folded;
+  }
+
+  function toggleSection(key: string, today: boolean) {
+    const fold = isOpen(key, today);
+    if (filtering || today) {
+      setMomentFolds({ context: momentContext, folds: { ...moment, [key]: fold } });
+    } else {
+      setFolds((prev) => {
+        const next = { ...prev, [key]: fold };
+        saveFolds(next);
+        return next;
+      });
+    }
+  }
   // Nets on now or within 12 hours; the box is left out when there are none (NETL-025).
   const next = comingUp(matching, now);
   const editingListing = listings.find((l) => l.id === editing) ?? null;
@@ -226,7 +282,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     { underway = false, over = false } = {}
   ) {
     const open = openRows.has(key);
-    const weeks = monthlyWeeks(l);
+    const weeks = monthlyWeeks(l) || dailyDays(l);
     return (
       <div
         key={key}
@@ -253,6 +309,57 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
         </span>
         {open && details(l)}
       </div>
+    );
+  }
+
+  /** Under way now, at today's meeting. */
+  const isToday = (e: WeekEntry) =>
+    e.meeting != null && e.meeting.underway && isoDate(e.meeting.start) === isoDate(now);
+
+  /** The bands a section's nets need, once each, in the order first met: "2m, 70cm". */
+  function bandsOf(nets: NetListing[]): string {
+    const labels = nets.map((l) => {
+      const r = repeaterOf(l);
+      return bandOf(r ? r.output_mhz : mhzFromText(l.frequency))?.label;
+    });
+    return [...new Set(labels.filter((b): b is string => !!b))].join(", ");
+  }
+
+  /**
+   * One section of the week under a heading that folds it (NETL-027); folded,
+   * the heading still tells how many nets and on which bands.
+   */
+  function section(
+    key: string,
+    title: string,
+    today: boolean,
+    count: number,
+    nets: NetListing[],
+    rows: () => React.ReactNode
+  ) {
+    const open = isOpen(key, today);
+    const Chevron = open ? ChevronDown : ChevronRight;
+    const bands = bandsOf(nets);
+    return (
+      <section
+        key={key}
+        className={"net-day" + (today ? " net-day-today" : "") + (open ? "" : " net-day-folded")}
+        aria-label={key === "daily" ? "Daily" : key === "asneeded" ? "As needed" : key}
+        aria-current={today ? "date" : undefined}
+      >
+        <h4 className="net-day-heading">
+          <button className="net-day-toggle" aria-expanded={open} onClick={() => toggleSection(key, today)}>
+            <Chevron className="net-day-chevron" aria-hidden />
+            {title}
+            <span className="net-day-summary">
+              {" · "}
+              {count} {count === 1 ? "net" : "nets"}
+              {!open && bands && ` · ${bands}`}
+            </span>
+          </button>
+        </h4>
+        {open && rows()}
+      </section>
     );
   }
 
@@ -355,33 +462,39 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
       )}
       {matching.length > 0 && (
         <div className="net-schedule">
-          {/* Sunday to Saturday, the same whatever day it is; days without nets are left out (NETL-020). */}
-          {week.days.filter((day) => day.entries.length > 0).map((day) => (
-            <section
-              key={day.name}
-              className={"net-day" + (day.today ? " net-day-today" : "")}
-              aria-label={day.name}
-              aria-current={day.today ? "date" : undefined}
-            >
-              <h4 className="net-day-heading">
-                {day.name}
-                {day.today && " · Today"}
-              </h4>
-              {day.entries.map((e) => {
-                const isToday = day.today && e.meeting != null && isoDate(e.meeting.start) === isoDate(now);
-                return row(e.listing, e.meeting, timeRange(e.listing), `${day.name}-${e.listing.id}`, {
-                  underway: isToday && e.meeting!.underway,
+          {/* Nets meeting most days, once, ahead of the week (NETL-020). */}
+          {week.daily.length > 0 &&
+            section("daily", "Daily", false, week.daily.length, week.daily.map((e) => e.listing), () =>
+              week.daily.map((e) =>
+                row(e.listing, e.meeting, timeRange(e.listing), `daily-${e.listing.id}`, {
+                  underway: isToday(e),
                   over: e.overToday,
-                });
-              })}
-            </section>
-          ))}
-          {week.asNeeded.length > 0 && (
-            <section className="net-day" aria-label="As needed">
-              <h4 className="net-day-heading">As needed</h4>
-              {week.asNeeded.map((l) => row(l, null, "As needed", `asneeded-${l.id}`))}
-            </section>
-          )}
+                })
+              )
+            )}
+          {/* Sunday to Saturday, the same whatever day it is; days without nets are left out (NETL-020). */}
+          {week.days
+            .filter((day) => day.entries.length > 0)
+            .map((day) =>
+              section(
+                day.name,
+                day.name + (day.today ? " · Today" : ""),
+                day.today,
+                day.entries.length,
+                day.entries.map((e) => e.listing),
+                () =>
+                  day.entries.map((e) =>
+                    row(e.listing, e.meeting, timeRange(e.listing), `${day.name}-${e.listing.id}`, {
+                      underway: day.today && isToday(e),
+                      over: e.overToday,
+                    })
+                  )
+              )
+            )}
+          {week.asNeeded.length > 0 &&
+            section("asneeded", "As needed", false, week.asNeeded.length, week.asNeeded, () =>
+              week.asNeeded.map((l) => row(l, null, "As needed", `asneeded-${l.id}`))
+            )}
         </div>
       )}
       {error && <p className="weather-area-error">{error}</p>}

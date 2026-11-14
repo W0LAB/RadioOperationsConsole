@@ -79,11 +79,21 @@ who attended.
 - **NETL-020:** Listings MUST be shown as a fixed week, Sunday to Saturday,
   that looks the same whatever day it is: one heading per weekday by name
   ("Thursday"), a weekday with no nets left out, each weekday's nets in
-  start-time order. A net that meets on several
-  weekdays MUST be listed under each, and a monthly net under its weekday
-  with which weeks it meets ("2nd & 4th"). Today's heading MUST be marked;
-  its nets MUST stay listed, one under way marked and one already over
-  dimmed. "As needed" nets come last, by name.
+  start-time order. A weekly net that meets on five weekdays or more MUST
+  instead be listed once, under a **Daily** heading ahead of the week, with
+  its days after its name ("Mon–Fri"; nothing when every day), so each
+  weekday shows the nets that set it apart. A net on fewer weekdays MUST be
+  listed under each, and a monthly net under its weekday with which weeks it
+  meets ("2nd & 4th"). Today's heading MUST be marked; its nets, and the
+  daily nets meeting today, MUST stay listed, one under way marked and one
+  already over dimmed. "As needed" nets come last, by name.
+- **NETL-027:** Each heading of the week (Daily, the weekdays, As needed)
+  MUST fold and unfold its nets, and say how many it holds ("Tuesday · 6
+  nets"); folded, also which bands they need ("· 2m, 70cm, 40m"). Today and
+  Daily MUST start open, the other weekdays and As needed folded. A heading
+  opened or folded MUST stay so on this computer, except today's, which
+  opens again each day. While searching or filtered, every heading with a
+  match MUST be open.
 - **NETL-021:** Each meeting MUST take one line: its time, its name, and its
   repeater with the repeater's one-line frequency ("W4ABC Orlando 146.940
   -0.600 PL 100.0"), or the listing's own frequency text; then ▶ (Start
@@ -160,8 +170,13 @@ who attended.
   And how far W4ABC Orlando is from the operator.
 
 - Given a listing "Morning Net", Monday to Friday at 07:00
-  Then it is listed under each weekday of the coming week
-  And not under today once 07:00–07:30 has passed.
+  Then it is listed once, under Daily, as "Morning Net Mon–Fri"
+  And not under any weekday
+  And on a weekday after 07:30 it is dimmed as over.
+
+- Given it is Friday and Tuesday holds 6 nets on 2m and 70cm
+  Then Tuesday's heading is folded, reading "Tuesday · 6 nets · 2m, 70cm"
+  And once the operator opens it, it stays open the next time.
 
 - Given a listing "County ARES Net", monthly on the 2nd and 4th Thursday at
   20:00, and today is Friday, October 2, 2026
