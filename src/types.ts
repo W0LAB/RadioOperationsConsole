@@ -127,14 +127,19 @@ export interface NetListingDetails {
   weekdays: number[];
   /** Monthly only: "1"–"4" or "last". */
   weeks: string[];
-  /** Local "HH:MM"; "" for as needed. */
+  /** "HH:MM" in `time_zone`; "" for as needed. */
   start_time: string;
-  /** Optional local "HH:MM". */
+  /** Optional "HH:MM" in `time_zone`. */
   end_time: string;
   run_by: string;
   /** What to know before checking in ("call sign and name, mobiles first"). */
   checkin_info: string;
   notes: string;
+  /**
+   * The zone the days and times are written in, by IANA name: "UTC",
+   * "America/New_York" (NETL-040).
+   */
+  time_zone: string;
 }
 
 export interface NetListing extends NetListingDetails {
@@ -537,6 +542,8 @@ export interface ImportSummary {
   unreadable: number;
   /** RFC 3339 time the list was made. */
   exported_at: string;
+  /** The zone an older net list's times are read in (SHARE-016); "" when the list says. */
+  time_zone_assumed: string;
 }
 
 /** A newer release on GitHub (src-tauri/src/updates.rs). */

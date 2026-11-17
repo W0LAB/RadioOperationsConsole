@@ -375,6 +375,7 @@ mod tests {
             name: "ARES Net".into(),
             repeater_id: Some(id.clone()),
             schedule_kind: "as_needed".into(),
+            time_zone: "UTC".into(),
             ..Default::default()
         })
         .unwrap();

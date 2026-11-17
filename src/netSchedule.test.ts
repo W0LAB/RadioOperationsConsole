@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { comingUp, dailyDays, describeSchedule, meetsOn, monthlyWeeks, nextMeeting, startsIn, weekView } from "./netSchedule";
+import {
+  comingUp,
+  dailyDays,
+  describeMeeting,
+  describeSchedule,
+  meetingTimes,
+  meetsOn,
+  monthlyWeeks,
+  nextMeeting,
+  startsIn,
+  weekView,
+} from "./netSchedule";
 import type { NetListing } from "./types";
 
 function listing(overrides: Partial<NetListing> = {}): NetListing {
@@ -18,6 +29,7 @@ function listing(overrides: Partial<NetListing> = {}): NetListing {
     run_by: "",
     notes: "",
     retired_at: "",
+    time_zone: "America/New_York",
     ...overrides,
   };
 }
@@ -179,5 +191,69 @@ describe("coming up (NETL-025)", () => {
     expect(startsIn(m(at(3, 10)), now)).toBe("Tomorrow 10:00");
     expect(startsIn(m(at(6, 19)), now)).toBe("Tue 19:00");
     expect(startsIn(m(at(15, 20)), now)).toBe("Thu Oct 15 20:00");
+  });
+});
+
+describe("time zones (NETL-040–045)", () => {
+  const ghost = listing({
+    id: "ghost",
+    name: "GhostNet North America",
+    time_zone: "UTC",
+    weekdays: [3],
+    start_time: "01:00",
+    end_time: "",
+  });
+  const d = (iso: string) => new Date(iso);
+
+  it("lists a UTC net under the weekday it falls on here, moving an hour when daylight-saving time ends", () => {
+    // Monday, October 26, 2026 (EDT): Wednesday 01:00Z is Tuesday 21:00 here.
+    const october = weekView([ghost], new Date(2026, 9, 26, 12));
+    expect(october.days[2].entries.map((e) => e.listing.id)).toEqual(["ghost"]);
+    expect(october.days[3].entries).toEqual([]);
+    expect(october.days[2].entries[0].meeting!.start).toEqual(d("2026-10-28T01:00:00Z"));
+    expect(meetingTimes(ghost, october.days[2].entries[0].meeting)).toBe("21:00 · 01:00Z");
+
+    // Monday, November 16, 2026 (EST): Tuesday 20:00 here.
+    const november = weekView([ghost], new Date(2026, 10, 16, 12));
+    const m = november.days[2].entries[0].meeting!;
+    expect(meetingTimes(ghost, m)).toBe("20:00 · 01:00Z");
+    expect(describeSchedule(ghost)).toBe("Wednesdays 01:00 UTC");
+    expect(describeMeeting(m)).toBe("Tue Nov 17, 20:00 EST · Wed 01:00Z");
+  });
+
+  it("moves a net to another weekday here when daylight-saving time changes it (NETL-043)", () => {
+    const late = listing({ id: "late", time_zone: "UTC", weekdays: [3], start_time: "04:30", end_time: "" });
+    expect(weekView([late], new Date(2026, 9, 26, 12)).days[3].entries[0].meeting!.start).toEqual(
+      new Date(2026, 9, 28, 0, 30)
+    );
+    expect(weekView([late], new Date(2026, 10, 16, 12)).days[2].entries[0].meeting!.start).toEqual(
+      new Date(2026, 10, 17, 23, 30)
+    );
+  });
+
+  it("keeps a net in this computer's zone at its time, with no second time", () => {
+    const tuesday = listing();
+    const before = nextMeeting(tuesday, new Date(2026, 9, 26, 12))!;
+    const after = nextMeeting(tuesday, new Date(2026, 10, 16, 12))!;
+    expect([before.start.getHours(), after.start.getHours()]).toEqual([19, 19]);
+    expect(meetingTimes(tuesday, after)).toBe("19:00–19:30");
+    expect(describeSchedule(tuesday)).toBe("Tuesdays 19:00–19:30");
+    expect(describeMeeting(after)).toBe("Tue Nov 17, 19:00 EST · Wed 00:00Z");
+  });
+
+  it("counts the week of the month in the net's own zone", () => {
+    // 2nd Wednesday at 01:00Z: Tuesday evening here, November 10, 2026.
+    const monthly = listing({ time_zone: "UTC", schedule_kind: "monthly", weekdays: [3], weeks: ["2"], start_time: "01:00", end_time: "" });
+    expect(nextMeeting(monthly, new Date(2026, 10, 1))!.start).toEqual(new Date(2026, 10, 10, 20, 0));
+  });
+
+  it("shows a daily UTC net's days as they fall here", () => {
+    const weekdaysUtc = listing({ time_zone: "UTC", weekdays: [1, 2, 3, 4, 5], start_time: "02:00", end_time: "" });
+    expect(dailyDays(weekdaysUtc, new Date(2026, 10, 16, 12))).toBe("Sun–Thu");
+  });
+
+  it("is still listed on a daylight-saving day (NETL-044)", () => {
+    const early = listing({ weekdays: [0], start_time: "02:30", end_time: "" });
+    expect(nextMeeting(early, new Date(2027, 2, 13, 12))!.start).toEqual(new Date("2027-03-14T07:30:00Z"));
   });
 });

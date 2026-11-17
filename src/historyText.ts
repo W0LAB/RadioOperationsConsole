@@ -67,6 +67,7 @@ const FIELD_NAMES: Record<string, string> = {
   weeks: "weeks",
   start_time: "start time",
   end_time: "end time",
+  time_zone: "time zone",
   repeater_id: "repeater",
   date: "date",
   at: "time",

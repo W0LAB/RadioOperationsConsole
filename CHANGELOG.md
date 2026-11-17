@@ -6,6 +6,21 @@ top. Each release's section here is also its description on the
 
 ## [Unreleased]
 
+**What works differently:**
+- Each net in **Nets** now keeps the time zone its times are written in.
+  When adding or editing a net, choose **Local**, **Zulu (UTC)**, or
+  **Other…** beside the times, and type them as the net publishes them.
+  The list works out when each meeting falls here: a Zulu net moves an hour
+  on your clock when daylight-saving time starts or ends, and is listed
+  under the day it falls on here (Wednesday 01:00Z is Tuesday evening in the
+  US). A net in another zone shows its own time after yours
+  ("20:00 · 01:00Z"), and its details give the next meeting here and in UTC.
+- Nets you already have keep your computer's time zone, so none of them
+  moves. If one was entered in Zulu, edit it and choose **Zulu (UTC)**
+  beside its times; its times stay as written.
+- Exported net lists carry each net's time zone. A list exported by an
+  older version is read in your time zone, and the import says so.
+
 ## [2.10.2] - 2026-11-13
 
 **What works differently:**

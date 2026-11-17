@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { describeImport } from "./ShareListControls";
 
-const summary = { total: 0, new: 0, already_here: 0, unreadable: 0, exported_at: "2026-10-07T12:00:00Z" };
+const summary = { total: 0, new: 0, already_here: 0, unreadable: 0, exported_at: "2026-10-07T12:00:00Z", time_zone_assumed: "" };
 
 describe("describeImport", () => {
   it("says what an import adds and what it leaves", () => {
@@ -10,6 +10,12 @@ describe("describeImport", () => {
     );
     expect(describeImport("repeaters", { ...summary, total: 2, new: 1, already_here: 1 }, true)).toBe(
       "Added 1 repeater. 1 already here is left as it is."
+    );
+  });
+
+  it("says which zone an older net list's times are read in (SHARE-016)", () => {
+    expect(describeImport("nets", { ...summary, total: 2, new: 2, time_zone_assumed: "America/Chicago" })).toBe(
+      "Adds 2 nets. Times in this list are read as America/Chicago."
     );
   });
 

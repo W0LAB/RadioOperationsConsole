@@ -148,6 +148,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0036_checkin_traffic_messages.sql",
         include_str!("../migrations/0036_checkin_traffic_messages.sql"),
     ),
+    (
+        "0037_net_listing_time_zone.sql",
+        include_str!("../migrations/0037_net_listing_time_zone.sql"),
+    ),
 ];
 
 /// Whether this build knows the migration, i.e. a database that has it wasn't
@@ -227,7 +231,10 @@ pub fn pending_migrations(conn: &Connection) -> Result<Vec<&'static str>, Box<dy
 }
 
 pub fn run_migrations(conn: &Connection) -> Result<(), Box<dyn Error>> {
-    apply_migrations(conn, MIGRATIONS)
+    apply_migrations(conn, MIGRATIONS)?;
+    // Net listings from before time zones take this computer's (NETL-047).
+    crate::net_listings::adopt_time_zone(conn, &crate::net_listings::local_time_zone())?;
+    Ok(())
 }
 
 fn apply_migrations(conn: &Connection, migrations: &[(&str, &str)]) -> Result<(), Box<dyn Error>> {

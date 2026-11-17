@@ -28,6 +28,8 @@ export function describeImport(kind: ListKind, s: ImportSummary, done = false): 
     parts.push(`${s.already_here} already here ${s.already_here === 1 ? "is left as it is" : "are left as they are"}.`);
   }
   if (s.unreadable > 0) parts.push(`${s.unreadable} couldn't be read and ${s.unreadable === 1 ? "is" : "are"} skipped.`);
+  // A list from before nets had a time zone (SHARE-016).
+  if (s.new > 0 && s.time_zone_assumed) parts.push(`Times in this list are read as ${s.time_zone_assumed}.`);
   return parts.join(" ");
 }
 

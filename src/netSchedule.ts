@@ -1,10 +1,11 @@
 import type { NetListing, NetListingDetails } from "./types";
 import { pad2 } from "./utils";
+import { localZone, timeIn, wallTime, zonedInstant, zoneLabel } from "./timeZones";
 
 /**
  * When listed nets meet (docs/features/net-listings.md), worked out from
- * their schedules in this computer's local time. Nothing is stored per
- * meeting (NETL-023).
+ * their schedules in each listing's time zone and shown in this computer's
+ * (NETL-040–045). Nothing is stored per meeting (NETL-023).
  */
 
 /** One meeting of a net. */
@@ -34,42 +35,78 @@ export const WEEK_OPTIONS = ["1", "2", "3", "4", "last"].map((value) => ({
   label: WEEK_NAMES[value],
 }));
 
-/** `day` at the local time "HH:MM". */
-function at(day: Date, hhmm: string): Date {
-  const [h, m] = hhmm.split(":").map(Number);
-  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m);
+/** The zone a listing's days and times are written in; this computer's if it has none yet. */
+export function zoneOf(l: NetListingDetails): string {
+  return l.time_zone || localZone();
 }
 
-function isLastWeek(day: Date): boolean {
-  const daysInMonth = new Date(day.getFullYear(), day.getMonth() + 1, 0).getDate();
-  return day.getDate() + 7 > daysInMonth;
+/** Whether the listing's times are in a zone other than this computer's. */
+export function isOtherZone(l: NetListingDetails): boolean {
+  return zoneOf(l) !== localZone();
 }
 
-/** Whether the net meets on this calendar day (NETL-003). */
-export function meetsOn(l: NetListingDetails, day: Date): boolean {
-  if (l.schedule_kind === "as_needed" || !l.weekdays.includes(day.getDay())) return false;
+/** A calendar date with no time zone, held as midnight UTC so date arithmetic is plain. */
+const civil = (year: number, month0: number, day: number) => new Date(Date.UTC(year, month0, day));
+
+function isLastWeek(c: Date): boolean {
+  const daysInMonth = civil(c.getUTCFullYear(), c.getUTCMonth() + 1, 0).getUTCDate();
+  return c.getUTCDate() + 7 > daysInMonth;
+}
+
+/** Whether the net meets on this calendar date, read in its own zone (NETL-003, NETL-042). */
+function meetsOnCivil(l: NetListingDetails, c: Date): boolean {
+  if (l.schedule_kind === "as_needed" || !l.weekdays.includes(c.getUTCDay())) return false;
   if (l.schedule_kind === "weekly") return true;
-  const week = Math.ceil(day.getDate() / 7);
-  return l.weeks.some((w) => (w === "last" ? isLastWeek(day) : Number(w) === week));
+  const week = Math.ceil(c.getUTCDate() / 7);
+  return l.weeks.some((w) => (w === "last" ? isLastWeek(c) : Number(w) === week));
 }
+
+/** Whether the net meets on the calendar date `day` (read by its local date), in its own zone (NETL-003). */
+export function meetsOn(l: NetListingDetails, day: Date): boolean {
+  return meetsOnCivil(l, civil(day.getFullYear(), day.getMonth(), day.getDate()));
+}
+
+const hasTime = (l: NetListingDetails) => l.schedule_kind !== "as_needed" && /^\d\d:\d\d$/.test(l.start_time);
+
+/** The meeting on calendar date `c` in the listing's zone, at its times there (NETL-042, NETL-044). */
+function meetingOnCivil(l: NetListingDetails, c: Date, now: Date): Meeting {
+  const zone = zoneOf(l);
+  const at = (hhmm: string) => {
+    const [h, m] = hhmm.split(":").map(Number);
+    return zonedInstant(c.getUTCFullYear(), c.getUTCMonth() + 1, c.getUTCDate(), h, m, zone);
+  };
+  const start = at(l.start_time);
+  const end = l.end_time ? at(l.end_time) : new Date(start.getTime() + ASSUMED_MINUTES * 60_000);
+  return { start, end, underway: start <= now && now < end };
+}
+
+/** The net's meetings that overlap `from`–`to`, soonest first. */
+function meetingsBetween(l: NetListingDetails, from: Date, to: Date, now: Date): Meeting[] {
+  if (!hasTime(l)) return [];
+  const zone = zoneOf(l);
+  const first = wallTime(from, zone);
+  const last = wallTime(to, zone);
+  const out: Meeting[] = [];
+  // From the day before, for a meeting begun then and still going.
+  for (let c = civil(first.year, first.month - 1, first.day - 1); c <= civil(last.year, last.month - 1, last.day); ) {
+    if (meetsOnCivil(l, c)) {
+      const m = meetingOnCivil(l, c, now);
+      if (m.end > from && m.start < to) out.push(m);
+    }
+    c = civil(c.getUTCFullYear(), c.getUTCMonth(), c.getUTCDate() + 1);
+  }
+  return out;
+}
+
+/** `days` days after `d`'s local date, at local midnight. */
+const localDay = (d: Date, days = 0) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
 
 /**
  * The meeting under way now, else the next one; null for "as needed" (or a
  * schedule with no time).
  */
 export function nextMeeting(l: NetListingDetails, now: Date): Meeting | null {
-  if (l.schedule_kind === "as_needed" || !/^\d\d:\d\d$/.test(l.start_time)) return null;
-  for (let i = 0; i <= LOOKAHEAD_DAYS; i++) {
-    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-    if (!meetsOn(l, day)) continue;
-    const start = at(day, l.start_time);
-    const end = l.end_time
-      ? at(day, l.end_time)
-      : new Date(start.getTime() + ASSUMED_MINUTES * 60_000);
-    if (end <= now) continue;
-    return { start, end, underway: start <= now };
-  }
-  return null;
+  return meetingsBetween(l, now, localDay(now, LOOKAHEAD_DAYS + 1), now)[0] ?? null;
 }
 
 /** One net meeting. */
@@ -113,24 +150,37 @@ export interface WeekView {
 const byName = (a: NetListing, b: NetListing) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 
-const hasTime = (l: NetListingDetails) => l.schedule_kind !== "as_needed" && /^\d\d:\d\d$/.test(l.start_time);
-
-/** A meeting on `day` at the listing's times. */
-function meetingOn(l: NetListingDetails, day: Date, now: Date): Meeting {
-  const start = at(day, l.start_time);
-  const end = l.end_time ? at(day, l.end_time) : new Date(start.getTime() + ASSUMED_MINUTES * 60_000);
-  return { start, end, underway: start <= now && now < end };
+/**
+ * Where a net falls in the week here (NETL-043): for each weekday it is
+ * written on, the local weekday of its first meeting from today on, that
+ * meeting, and the next one not over (today's while it isn't).
+ */
+function placesInWeek(
+  l: NetListingDetails,
+  now: Date
+): { weekday: number; first: Meeting | null; next: Meeting | null }[] {
+  const today = localDay(now);
+  const zone = zoneOf(l);
+  const meetings = meetingsBetween(l, today, localDay(now, LOOKAHEAD_DAYS + 1), now).filter(
+    (m) => m.start >= today
+  );
+  return [...l.weekdays].sort((a, b) => a - b).map((written) => {
+    const onIt = meetings.filter((m) => wallTime(m.start, zone).weekday === written);
+    const first = onIt[0] ?? null;
+    return {
+      weekday: first ? first.start.getDay() : written,
+      first,
+      next: onIt.find((m) => m.end > now) ?? null,
+    };
+  });
 }
 
-/** The net's next meeting on this weekday that isn't over, from today on. */
-function nextOnWeekday(l: NetListingDetails, weekday: number, now: Date): Meeting | null {
-  for (let i = (weekday - now.getDay() + 7) % 7; i <= LOOKAHEAD_DAYS; i += 7) {
-    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-    if (!meetsOn(l, day)) continue;
-    const m = meetingOn(l, day, now);
-    if (m.end > now) return m;
-  }
-  return null;
+/** The net's meetings today here, if any, are all over. */
+function overToday(l: NetListingDetails, now: Date): boolean {
+  const today = meetingsBetween(l, localDay(now), localDay(now, 1), now).filter(
+    (m) => isoDate(m.start) === isoDate(now)
+  );
+  return today.length > 0 && today.every((m) => m.end <= now);
 }
 
 /** Whether the net is listed once under Daily rather than under each weekday (NETL-020). */
@@ -146,34 +196,45 @@ export function isDaily(l: NetListingDetails): boolean {
  * nets carry today's meeting, and one already over says so.
  */
 export function weekView(listings: NetListing[], now: Date): WeekView {
-  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const scheduled = listings.filter(hasTime);
-  const overToday = (l: NetListing) => meetsOn(l, todayDate) && meetingOn(l, todayDate, now).end <= now;
-  const byTime = (a: WeekEntry, b: WeekEntry) =>
-    a.listing.start_time.localeCompare(b.listing.start_time) || byName(a.listing, b.listing);
+  // By the time here (NETL-043); a net with no meeting in reach by its written time.
+  const timeOf = (e: WeekEntry) => (e.meeting ? hhmm(e.meeting.start) : e.listing.start_time);
+  const byTime = (a: WeekEntry, b: WeekEntry) => timeOf(a).localeCompare(timeOf(b)) || byName(a.listing, b.listing);
   const daily = scheduled
     .filter(isDaily)
-    .map((listing) => ({ listing, meeting: nextMeeting(listing, now), overToday: overToday(listing) }))
+    .map((listing) => ({ listing, meeting: nextMeeting(listing, now), overToday: overToday(listing, now) }))
     .sort(byTime);
-  const days = DAY_NAMES.map((name, weekday) => {
-    const today = weekday === now.getDay();
-    const entries = scheduled
-      .filter((l) => !isDaily(l) && l.weekdays.includes(weekday))
-      .map((listing) => ({
+  const byWeekday: WeekEntry[][] = DAY_NAMES.map(() => []);
+  for (const listing of scheduled.filter((l) => !isDaily(l))) {
+    const seen = new Set<number>();
+    for (const place of placesInWeek(listing, now)) {
+      if (seen.has(place.weekday)) continue;
+      seen.add(place.weekday);
+      const isToday = place.first != null && isoDate(place.first.start) === isoDate(now);
+      byWeekday[place.weekday].push({
         listing,
-        meeting: nextOnWeekday(listing, weekday, now),
-        overToday: today && overToday(listing),
-      }))
-      .sort(byTime);
-    return { weekday, name, today, entries };
-  });
+        meeting: place.next,
+        overToday: isToday && place.first!.end <= now && !(place.next && isoDate(place.next.start) === isoDate(now)),
+      });
+    }
+  }
+  const days = DAY_NAMES.map((name, weekday) => ({
+    weekday,
+    name,
+    today: weekday === now.getDay(),
+    entries: byWeekday[weekday].sort(byTime),
+  }));
   const asNeeded = listings.filter((l) => l.schedule_kind === "as_needed").sort(byName);
   return { daily, days, asNeeded };
 }
 
-/** Which days a daily net meets, after its name: "Mon–Fri", "Sun–Thu"; "" every day (NETL-020). */
-export function dailyDays(l: NetListingDetails): string {
-  return isDaily(l) && l.weekdays.length < 7 ? weeklyDays(l.weekdays) : "";
+/**
+ * Which days a daily net meets, after its name, as they fall here: "Mon–Fri",
+ * "Sun–Thu"; "" every day (NETL-020, NETL-043).
+ */
+export function dailyDays(l: NetListingDetails, now: Date = new Date()): string {
+  if (!isDaily(l) || l.weekdays.length >= 7) return "";
+  return weeklyDays(isOtherZone(l) ? placesInWeek(l, now).map((p) => p.weekday) : l.weekdays);
 }
 
 /** Which weeks of the month a monthly net meets: "2nd & 4th", "last"; "" when weekly. */
@@ -222,7 +283,7 @@ export function startsIn(m: Meeting, now: Date): string {
 
 /** "Tuesdays", "Mon–Fri", "Sun–Thu", "Mon, Wed, Fri", "Daily". */
 function weeklyDays(weekdays: number[]): string {
-  const days = [...weekdays].sort((a, b) => a - b);
+  const days = [...new Set(weekdays)].sort((a, b) => a - b);
   if (days.length === 7) return "Daily";
   if (days.length === 1) return `${DAY_NAMES[days[0]]}s`;
   // Three or more days in a row, as a range.
@@ -236,8 +297,12 @@ function andList(items: string[]): string {
   return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} & ${items[items.length - 1]}`;
 }
 
-/** "Tuesdays 19:00–19:30", "2nd & 4th Thursday 20:00", "As needed" (NETL-021). */
-export function describeSchedule(l: NetListingDetails): string {
+/**
+ * "Tuesdays 19:00–19:30", "2nd & 4th Thursday 20:00", "As needed" (NETL-021),
+ * in the listing's own zone, which is named when it isn't this computer's:
+ * "Wednesdays 01:00 UTC" (NETL-045).
+ */
+export function describeSchedule(l: NetListingDetails, now: Date = new Date()): string {
   if (l.schedule_kind === "as_needed") return "As needed";
   const days =
     l.schedule_kind === "weekly"
@@ -248,11 +313,41 @@ export function describeSchedule(l: NetListingDetails): string {
             : l.weekdays.map((d) => DAY_SHORT[d]).join(", ")
         }`;
   const time = l.end_time ? `${l.start_time}–${l.end_time}` : l.start_time;
-  const text = `${days} ${time}`;
+  const zone = zoneOf(l);
+  const label = zoneLabel(zone, now);
+  const suffix = isOtherZone(l) ? ` ${label === "Z" ? "UTC" : label}` : "";
+  const text = `${days} ${time}${suffix}`;
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** A date as "YYYY-MM-DD", local. */
 export function isoDate(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * A meeting's time on its line (NETL-045): here, "19:00–19:30"; and when the
+ * listing's zone isn't this computer's, its own time after: "20:00–21:00 ·
+ * 01:00Z". With no meeting in reach, its written times.
+ */
+export function meetingTimes(l: NetListingDetails, m: Meeting | null): string {
+  if (!m) {
+    const written = l.end_time ? `${l.start_time}–${l.end_time}` : l.start_time;
+    if (!isOtherZone(l)) return written;
+    const label = zoneLabel(zoneOf(l), new Date());
+    return label === "Z" ? `${written}Z` : `${written} ${label}`;
+  }
+  const here = l.end_time ? `${hhmm(m.start)}–${hhmm(m.end)}` : hhmm(m.start);
+  return isOtherZone(l) ? `${here} · ${timeIn(m.start, zoneOf(l))}` : here;
+}
+
+/**
+ * When a meeting is, here and in UTC, so both are at hand (NETL-045):
+ * "Tue Nov 17, 20:00 EST · Wed 01:00Z".
+ */
+export function describeMeeting(m: Meeting): string {
+  const here = `${DAY_SHORT[m.start.getDay()]} ${MONTH_SHORT[m.start.getMonth()]} ${m.start.getDate()}, ${timeIn(m.start, localZone())}`;
+  if (localZone() === "UTC") return here;
+  const utc = wallTime(m.start, "UTC");
+  return `${here} · ${DAY_SHORT[utc.weekday]} ${timeIn(m.start, "UTC")}`;
 }

@@ -6,14 +6,21 @@ import { formatRepeater, tuningDetails } from "../../repeaters";
 import {
   comingUp,
   dailyDays,
+  describeMeeting,
   describeSchedule,
   isoDate,
+  isOtherZone,
+  meetingTimes,
   monthlyWeeks,
+  nextMeeting,
   startsIn,
   weekView,
+  zoneOf,
   type Meeting,
   type WeekEntry,
 } from "../../netSchedule";
+import { localZone, timeIn, zoneName } from "../../timeZones";
+import { pad2 } from "../../utils";
 import NetListingForm, { EMPTY_LISTING } from "../nets/NetListingForm";
 import type { ActivityPrefill } from "../operations/activityPrefill";
 import { shortMiles } from "../checkins/roster/shared";
@@ -186,9 +193,9 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     onStartActivity({
       title: l.name,
       activityType: l.activity_type,
-      // The day of the meeting it was started from; today when as needed.
+      // The day and time here of the meeting it was started from; today when as needed (NETL-030).
       date: isoDate(meeting?.start ?? now),
-      time: l.start_time,
+      time: meeting ? `${pad2(meeting.start.getHours())}:${pad2(meeting.start.getMinutes())}` : l.start_time,
       frequency: r ? formatRepeater(r) : l.frequency,
       repeater:
         r && r.location_lat != null && r.location_lon != null
@@ -233,8 +240,11 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
       here && r?.location_lat != null && r.location_lon != null
         ? haversineKm(here.lat, here.lon, r.location_lat, r.location_lon)
         : null;
+    const next = nextMeeting(l, now);
     const facts: [string, string][] = [
-      ["Meets", describeSchedule(l)],
+      ["Meets", describeSchedule(l, now)],
+      // Here and in UTC, so both are at hand (NETL-045).
+      ["Next", next ? describeMeeting(next) : ""],
       ["Tune", r ? tuningDetails(r) : l.frequency],
       ["Repeater", r ? `${r.name}${km != null ? ` · ${shortMiles(km)} away` : ""}` : ""],
       ["Run by", l.run_by],
@@ -282,7 +292,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     { underway = false, over = false } = {}
   ) {
     const open = openRows.has(key);
-    const weeks = monthlyWeeks(l) || dailyDays(l);
+    const weeks = monthlyWeeks(l) || dailyDays(l, now);
     return (
       <div
         key={key}
@@ -363,7 +373,6 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     );
   }
 
-  const timeRange = (l: NetListing) => (l.end_time ? `${l.start_time}–${l.end_time}` : l.start_time);
 
   return (
     <div className="panel nets-panel">
@@ -403,7 +412,8 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
         </div>
       </div>
       <p className="settings-hint">
-        Times are this computer's local time.
+        Times are shown in this computer's time, {zoneName(localZone())}; a net kept in another zone shows its own
+        time after ("20:00 · 01:00Z").
         {!here && " Set a location on your operator to see how far each repeater is."}
       </p>
       {editing === "new" && (
@@ -440,6 +450,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
                 }
               >
                 {startsIn(meeting, now)}
+                {isOtherZone(l) && ` · ${timeIn(meeting.start, zoneOf(l))}`}
               </span>
               <strong className="net-row-name">
           <ActivityTypeIcon type={l.activity_type} />
@@ -466,7 +477,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
           {week.daily.length > 0 &&
             section("daily", "Daily", false, week.daily.length, week.daily.map((e) => e.listing), () =>
               week.daily.map((e) =>
-                row(e.listing, e.meeting, timeRange(e.listing), `daily-${e.listing.id}`, {
+                row(e.listing, e.meeting, meetingTimes(e.listing, e.meeting), `daily-${e.listing.id}`, {
                   underway: isToday(e),
                   over: e.overToday,
                 })
@@ -484,7 +495,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
                 day.entries.map((e) => e.listing),
                 () =>
                   day.entries.map((e) =>
-                    row(e.listing, e.meeting, timeRange(e.listing), `${day.name}-${e.listing.id}`, {
+                    row(e.listing, e.meeting, meetingTimes(e.listing, e.meeting), `${day.name}-${e.listing.id}`, {
                       underway: day.today && isToday(e),
                       over: e.overToday,
                     })

@@ -10,6 +10,11 @@ const execArgv = process.allowedNodeEnvironmentFlags.has("--no-experimental-webs
   ? ["--no-experimental-webstorage"]
   : [];
 
+// One time zone for every test, wherever they run (CI runs in UTC), so net
+// times can be checked across daylight-saving changes (NETL-042). The test
+// workers inherit it.
+process.env.TZ = "America/New_York";
+
 export default defineConfig({
   plugins: [react()],
   test: {

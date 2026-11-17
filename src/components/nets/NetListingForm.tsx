@@ -3,6 +3,8 @@ import type { NetListingDetails, Repeater, ScheduleKind } from "../../types";
 import { formatRepeater } from "../../repeaters";
 import { describeSchedule, WEEK_OPTIONS, WEEKDAY_OPTIONS } from "../../netSchedule";
 import ActivityTypeSelect from "../operations/ActivityTypeSelect";
+import TimeZoneChoice, { zoneHint } from "./TimeZoneChoice";
+import { localZone } from "../../timeZones";
 
 export const EMPTY_LISTING: NetListingDetails = {
   name: "",
@@ -17,6 +19,8 @@ export const EMPTY_LISTING: NetListingDetails = {
   run_by: "",
   checkin_info: "",
   notes: "",
+  // This computer's, filled in when the form opens (NETL-040).
+  time_zone: "",
 };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -55,7 +59,8 @@ export default function NetListingForm({
   onSave: (d: NetListingDetails) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [d, setD] = useState<NetListingDetails>(initial);
+  // A new listing starts on Local (NETL-040).
+  const [d, setD] = useState<NetListingDetails>({ ...initial, time_zone: initial.time_zone || localZone() });
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<NetListingDetails>) => setD((prev) => ({ ...prev, ...patch }));
   const scheduled = d.schedule_kind !== "as_needed";
@@ -192,8 +197,9 @@ export default function NetListingForm({
                 onKeyDown={enter}
               />
             </label>
-            <span className="settings-hint">This computer's local time.</span>
+            <span className="settings-hint">{zoneHint(d.time_zone)}</span>
           </div>
+          <TimeZoneChoice value={d.time_zone} onChange={(time_zone) => set({ time_zone })} />
         </>
       )}
       <input

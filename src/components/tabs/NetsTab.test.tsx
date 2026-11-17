@@ -46,6 +46,7 @@ function listing(overrides: Partial<NetListing>): NetListing {
     run_by: "Orange County ARES",
     notes: "",
     retired_at: "",
+    time_zone: "America/New_York",
     ...overrides,
   };
 }
@@ -270,5 +271,57 @@ describe("NetsTab", () => {
       }),
       "op1"
     );
+  });
+
+  describe("time zones (NETL-040–048)", () => {
+    // GhostNet meets Wednesdays 01:00 UTC: Tuesday 21:00 here in October (EDT).
+    const GHOST = listing({ id: "ghost", name: "GhostNet", repeater_id: null, frequency: "7.107 JS8", time_zone: "UTC", weekdays: [3], start_time: "01:00", end_time: "" });
+
+    beforeEach(() => {
+      vi.mocked(api.listNetListings).mockImplementation((retired = false) =>
+        Promise.resolve(retired ? [] : [...LISTINGS, GHOST])
+      );
+    });
+
+    it("lists a UTC net under the weekday here, at both times, and starts it at the time here", async () => {
+      const user = userEvent.setup();
+      const onStart = vi.fn();
+      renderTab(onStart);
+      await screen.findAllByText("Morning Net");
+      expect(screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"))).not.toContain("Wednesday");
+      await unfold(user, "Tuesday");
+      const row = rowIn(day("Tuesday"), "GhostNet");
+      expect(within(row).getByText("21:00 · 01:00Z")).toBeInTheDocument();
+
+      await user.click(within(row).getByRole("button", { name: "Show details of GhostNet" }));
+      expect(within(row).getByText("Wednesdays 01:00 UTC")).toBeInTheDocument();
+      expect(within(row).getByText("Tue Oct 6, 21:00 EDT · Wed 01:00Z")).toBeInTheDocument();
+
+      await user.click(within(row).getByRole("button", { name: "Start activity for GhostNet" }));
+      expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-10-06", time: "21:00" }));
+    });
+
+    it("enters a net in Zulu as published, starting on Local (NETL-040, NETL-041)", async () => {
+      const user = userEvent.setup();
+      renderTab();
+      await screen.findAllByText("Morning Net");
+      await user.click(screen.getByRole("button", { name: "+ Add net" }));
+      expect(screen.getByRole("radio", { name: "Local (America/New York)" })).toBeChecked();
+      expect(screen.getByText("Times are local (America/New York).")).toBeInTheDocument();
+      await user.type(screen.getByLabelText("Net name"), "Zulu Net");
+      await user.click(screen.getByRole("button", { name: "Wed" }));
+      await user.type(screen.getByLabelText("Start time"), "01:00");
+      await user.click(screen.getByRole("radio", { name: "Zulu (UTC)" }));
+      expect(screen.getByText("Times are UTC (Zulu).")).toBeInTheDocument();
+      expect(screen.getByLabelText("Start time")).toHaveValue("01:00");
+      expect(screen.getByText("Wednesdays 01:00 UTC")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Save net" }));
+      expect(api.saveNetListing).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({ weekdays: [3], start_time: "01:00", time_zone: "UTC" }),
+        "op1"
+      );
+    });
+
   });
 });

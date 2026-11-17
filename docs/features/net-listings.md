@@ -267,10 +267,10 @@ written in, and the app works out when each meeting falls here.
   spreadsheets won't share one layout; it needs either a fixed template to
   fill in or a column-matching step, decided when it's built.
 - Printing or exporting the list.
-- Sessions (`NETL-002`, `NETL-008`, `NETL-009`), all-day sessions
-  (`NETL-004`, `NETL-028`, `NETL-049`) and time zones (`NETL-040`–`048`).
-  Until they're built, a listing has one frequency and one schedule, and
-  its times are read in this computer's zone.
+- Sessions (`NETL-002`, `NETL-008`, `NETL-009`), with the seasons they
+  bring (`NETL-046`), and all-day sessions (`NETL-004`, `NETL-028`,
+  `NETL-049`). Until they're built, a listing has one frequency and one
+  schedule.
 
 ## Acceptance examples
 

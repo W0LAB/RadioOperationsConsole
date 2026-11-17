@@ -33,7 +33,7 @@ pub struct NetListingDetails {
     pub weekdays: Vec<u8>,
     /// Monthly only: "1"–"4" or "last".
     pub weeks: Vec<String>,
-    /// Local time, "HH:MM"; empty for "as needed".
+    /// "HH:MM" in `time_zone`; empty for "as needed".
     pub start_time: String,
     /// Optional; empty when not given.
     pub end_time: String,
@@ -41,6 +41,47 @@ pub struct NetListingDetails {
     /// What to know before checking in (NETL-006).
     pub checkin_info: String,
     pub notes: String,
+    /// The zone the days and times are written in, by IANA name: "UTC",
+    /// "America/New_York" (NETL-040). Empty only from an older interface or
+    /// list file, until it is filled in with this computer's.
+    #[serde(default)]
+    pub time_zone: String,
+}
+
+/// This computer's time zone by IANA name, or UTC if it can't be told.
+pub fn local_time_zone() -> String {
+    iana_time_zone::get_timezone().unwrap_or_else(|_| "UTC".into())
+}
+
+/// Gives every listing without a time zone `zone`, so none of them moves
+/// (NETL-047): they were read in this computer's.
+pub fn adopt_time_zone(conn: &rusqlite::Connection, zone: &str) -> rusqlite::Result<usize> {
+    conn.execute(
+        "UPDATE net_listings SET time_zone = ?1 WHERE coalesce(time_zone, '') = ''",
+        params![zone],
+    )
+}
+
+/// Whether `zone` looks like a time zone name ("UTC", "America/Argentina/Salta").
+/// Which names exist is the interface's to know; this keeps out junk.
+fn is_zone_name(zone: &str) -> bool {
+    !zone.is_empty()
+        && zone.len() <= 64
+        && zone.chars().all(|c| c.is_ascii_alphanumeric() || "/_+-".contains(c))
+        && !zone.starts_with('/')
+        && !zone.ends_with('/')
+}
+
+/// Checks a time zone the operator chose (NETL-040).
+pub fn clean_time_zone(zone: &str) -> Result<String, String> {
+    let zone = zone.trim();
+    if zone.is_empty() {
+        return Err("Choose the time zone the net's times are in.".into());
+    }
+    if !is_zone_name(zone) {
+        return Err(format!("\"{zone}\" isn't a time zone."));
+    }
+    Ok(zone.to_string())
 }
 
 const WEEKS: [&str; 5] = ["1", "2", "3", "4", "last"];
@@ -55,8 +96,9 @@ fn minutes(t: &str) -> Option<u32> {
     (h < 24 && m < 60).then_some(h * 60 + m)
 }
 
-/// Checks and tidies what was entered (NETL-001–005).
+/// Checks and tidies what was entered (NETL-001–005, NETL-040).
 pub fn clean(mut d: NetListingDetails) -> Result<NetListingDetails, String> {
+    d.time_zone = clean_time_zone(&d.time_zone)?;
     for text in [&mut d.name, &mut d.frequency, &mut d.run_by, &mut d.checkin_info, &mut d.notes, &mut d.start_time, &mut d.end_time] {
         *text = text.trim().to_string();
     }
@@ -120,7 +162,7 @@ fn blank(s: &str) -> Option<&str> {
     if s.is_empty() { None } else { Some(s) }
 }
 
-const COLS: &str = "id, name, activity_type, repeater_id, coalesce(frequency,''), schedule_kind, coalesce(weekdays,''), coalesce(weeks,''), coalesce(start_time,''), coalesce(end_time,''), coalesce(run_by,''), coalesce(notes,''), coalesce(retired_at,''), coalesce(checkin_info,'')";
+const COLS: &str = "id, name, activity_type, repeater_id, coalesce(frequency,''), schedule_kind, coalesce(weekdays,''), coalesce(weeks,''), coalesce(start_time,''), coalesce(end_time,''), coalesce(run_by,''), coalesce(notes,''), coalesce(retired_at,''), coalesce(checkin_info,''), coalesce(time_zone,'')";
 
 fn map(r: &rusqlite::Row) -> rusqlite::Result<NetListing> {
     let weekdays: String = r.get(6)?;
@@ -140,6 +182,7 @@ fn map(r: &rusqlite::Row) -> rusqlite::Result<NetListing> {
             run_by: r.get(10)?,
             checkin_info: r.get(13)?,
             notes: r.get(11)?,
+            time_zone: r.get(14)?,
         },
         retired_at: r.get(12)?,
     })
@@ -175,8 +218,8 @@ impl Repository {
     pub fn create_net_listing(&self, d: &NetListingDetails) -> rusqlite::Result<String> {
         let id = Uuid::new_v4().to_string();
         self.conn.execute(
-            "INSERT INTO net_listings(id, name, activity_type, repeater_id, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, notes, created_at, checkin_info) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)",
-            params![id, d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), Utc::now().to_rfc3339(), blank(&d.checkin_info)],
+            "INSERT INTO net_listings(id, name, activity_type, repeater_id, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, notes, created_at, checkin_info, time_zone) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
+            params![id, d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), Utc::now().to_rfc3339(), blank(&d.checkin_info), d.time_zone],
         )?;
         Ok(id)
     }
@@ -185,8 +228,8 @@ impl Repository {
     /// started from it keep their own copies (NETL-011).
     pub fn update_net_listing(&self, id: &str, d: &NetListingDetails) -> rusqlite::Result<()> {
         let n = self.conn.execute(
-            "UPDATE net_listings SET name = ?1, activity_type = ?2, repeater_id = ?3, frequency = ?4, schedule_kind = ?5, weekdays = ?6, weeks = ?7, start_time = ?8, end_time = ?9, run_by = ?10, notes = ?11, checkin_info = ?12 WHERE id = ?13",
-            params![d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), blank(&d.checkin_info), id],
+            "UPDATE net_listings SET name = ?1, activity_type = ?2, repeater_id = ?3, frequency = ?4, schedule_kind = ?5, weekdays = ?6, weeks = ?7, start_time = ?8, end_time = ?9, run_by = ?10, notes = ?11, checkin_info = ?12, time_zone = ?13 WHERE id = ?14",
+            params![d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), blank(&d.checkin_info), d.time_zone, id],
         )?;
         if n == 0 {
             return Err(rusqlite::Error::QueryReturnedNoRows);
@@ -233,6 +276,7 @@ mod tests {
             start_time: "19:00".into(),
             end_time: "19:30".into(),
             checkin_info: " Call sign and name, mobiles first ".into(),
+            time_zone: " America/New_York ".into(),
             ..Default::default()
         }
     }
@@ -256,6 +300,10 @@ mod tests {
         assert!(bad(|d| d.start_time = "24:00".into()).contains("HH:MM"));
         assert!(bad(|d| d.end_time = "18:00".into()).contains("after"));
         assert!(bad(|d| d.schedule_kind = "daily".into()).contains("schedule"));
+        // NETL-040
+        assert_eq!(d.time_zone, "America/New_York");
+        assert!(bad(|d| d.time_zone = " ".into()).contains("time zone"));
+        assert!(bad(|d| d.time_zone = "Mars; DROP".into()).contains("isn't a time zone"));
         assert!(bad(|d| d.schedule_kind = "monthly".into()).contains("weeks"));
         assert!(bad(|d| {
             d.schedule_kind = "monthly".into();
@@ -308,5 +356,23 @@ mod tests {
         assert_eq!(r.delete_net_listing(&id).unwrap().schedule_kind, "monthly");
         assert!(r.get_net_listing(&id).is_err());
         assert!(r.delete_net_listing(&id).is_err());
+    }
+
+    #[test]
+    fn time_zones_are_kept_and_adopted() {
+        // NETL-040, NETL-047
+        let r = repo();
+        let a = r.create_net_listing(&clean(tuesday_net()).unwrap()).unwrap();
+        let mut utc = clean(tuesday_net()).unwrap();
+        utc.time_zone = "UTC".into();
+        let b = r.create_net_listing(&utc).unwrap();
+        assert_eq!(r.get_net_listing(&b).unwrap().details.time_zone, "UTC");
+
+
+        // Listings from before time zones take this computer's, and only they.
+        r.conn.execute("UPDATE net_listings SET time_zone = NULL WHERE id = ?1", params![a]).unwrap();
+        assert_eq!(adopt_time_zone(&r.conn, "America/Chicago").unwrap(), 1);
+        assert_eq!(r.get_net_listing(&a).unwrap().details.time_zone, "America/Chicago");
+        assert_eq!(r.get_net_listing(&b).unwrap().details.time_zone, "UTC");
     }
 }
