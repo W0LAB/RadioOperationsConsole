@@ -2643,10 +2643,27 @@ button.online-pill-working-offline:hover {
 .net-row-details {
   grid-column: 2 / -1;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
   padding-bottom: 4px;
+}
+
+/* "Delete … for good?": a bar across the whole width, under the details or
+   the retired net it's for, question on the left and buttons on the right. */
+.net-delete-confirm {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 2px 0 6px 0;
+  padding: 6px 10px;
+  border: 1px solid var(--danger, #e05252);
+  border-radius: 4px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 /* The search, repeater filter and + Add net share the heading's line. */
@@ -2829,6 +2846,99 @@ button.online-pill-working-offline:hover {
   padding: 0 4px;
   color: var(--text-dim);
   font-size: calc(12px * var(--font-scale));
+}
+
+/* Adding or editing a net (NetListingForm.tsx): labels in a column on the left. */
+/* One label width for every section, so their fields line up. */
+.net-form {
+  --net-label-width: 96px;
+}
+
+.net-form-grid {
+  display: grid;
+  grid-template-columns: var(--net-label-width) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.net-form-grid > input {
+  max-width: 48ch;
+}
+
+.net-form-label {
+  color: var(--text-dim);
+  font-size: calc(13px * var(--font-scale));
+}
+
+/* The activity type's own "Type" label would repeat the row's. */
+.net-form-grid .activity-field-label {
+  display: none;
+}
+
+.net-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Like the panel's other headings (.panel h4); one line, the hint after. */
+.panel h4.net-form-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+
+/* Under the fields, in line with them: it adds to When and where. */
+.net-form-add {
+  align-self: flex-start;
+  margin-left: calc(var(--net-label-width) + 12px);
+}
+
+/* Opens More details; looks like the heading it is, small capitals and all. */
+.net-form-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.net-form-more:hover {
+  color: var(--accent);
+  border: none;
+}
+
+/* What's folded away, in plain words after the heading. */
+.net-form-heading-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.net-zone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.net-form-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
 
 /* An activity's summary, laid out like the end-of-net step (SummaryDialog.tsx). */

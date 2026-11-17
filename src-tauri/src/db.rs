@@ -148,6 +148,18 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0036_checkin_traffic_messages.sql",
         include_str!("../migrations/0036_checkin_traffic_messages.sql"),
     ),
+    (
+        "0037_net_listing_time_zone.sql",
+        include_str!("../migrations/0037_net_listing_time_zone.sql"),
+    ),
+    (
+        "0038_net_listing_all_day.sql",
+        include_str!("../migrations/0038_net_listing_all_day.sql"),
+    ),
+    (
+        "0039_net_sessions.sql",
+        include_str!("../migrations/0039_net_sessions.sql"),
+    ),
 ];
 
 /// Whether this build knows the migration, i.e. a database that has it wasn't
@@ -227,7 +239,10 @@ pub fn pending_migrations(conn: &Connection) -> Result<Vec<&'static str>, Box<dy
 }
 
 pub fn run_migrations(conn: &Connection) -> Result<(), Box<dyn Error>> {
-    apply_migrations(conn, MIGRATIONS)
+    apply_migrations(conn, MIGRATIONS)?;
+    // Net listings from before time zones take this computer's (NETL-047).
+    crate::net_listings::adopt_time_zone(conn, &crate::net_listings::local_time_zone())?;
+    Ok(())
 }
 
 fn apply_migrations(conn: &Connection, migrations: &[(&str, &str)]) -> Result<(), Box<dyn Error>> {
@@ -288,6 +303,35 @@ mod tests {
         let fixed = [("x.sql", "CREATE TABLE t (a TEXT); ALTER TABLE t ADD COLUMN b TEXT;")];
         apply_migrations(&conn, &fixed).unwrap();
         conn.execute("INSERT INTO t (a, b) VALUES ('1', '2')", []).unwrap();
+    }
+
+    #[test]
+    fn net_listings_from_before_time_zones_all_day_and_sessions_come_through() {
+        // NETL-047, NETL-049, NETL-002: as 0036 left them.
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        let before = MIGRATIONS.iter().position(|(v, _)| *v == "0037_net_listing_time_zone.sql").unwrap();
+        apply_migrations(&conn, &MIGRATIONS[..before]).unwrap();
+        conn.execute_batch(
+            "INSERT INTO repeaters(id, name, output_mhz, offset_mhz, created_at) VALUES ('r1', 'W4ABC', 146.94, -0.6, 't');
+             INSERT INTO net_listings(id, name, activity_type, repeater_id, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, notes, created_at, checkin_info)
+                 VALUES ('n1', 'Tuesday Net', 'directed_net', 'r1', NULL, 'weekly', '2', NULL, '19:00', '19:30', 'ARES', 'notes', 't', 'call sign');
+             INSERT INTO net_listings(id, name, activity_type, repeater_id, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, notes, created_at, retired_at)
+                 VALUES ('n2', 'SitRepNet', 'directed_net', NULL, '7.078', 'weekly', '0,1,2,3,4,5,6', NULL, '00:00', '23:59', NULL, NULL, 't', 'old');",
+        )
+        .unwrap();
+        run_migrations(&conn).unwrap();
+
+        let repo = crate::repo::Repository::new(conn);
+        let n1 = repo.get_net_listing("n1").unwrap().details;
+        assert_eq!((n1.run_by.as_str(), n1.checkin_info.as_str(), n1.notes.as_str()), ("ARES", "call sign", "notes"));
+        assert!(!n1.time_zone.is_empty(), "took this computer's zone");
+        assert_eq!(n1.sessions.len(), 1);
+        let s = &n1.sessions[0];
+        assert_eq!((s.repeater_id.as_deref(), s.start_time.as_str(), s.weekdays.clone()), (Some("r1"), "19:00", vec![2]));
+        let n2 = repo.get_net_listing("n2").unwrap();
+        assert_eq!(n2.retired_at, "old");
+        assert!(n2.details.sessions[0].all_day && n2.details.sessions[0].start_time.is_empty());
     }
 
     #[test]

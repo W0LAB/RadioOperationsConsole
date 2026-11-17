@@ -1,25 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { comingUp, dailyDays, describeSchedule, meetsOn, monthlyWeeks, nextMeeting, startsIn, weekView } from "./netSchedule";
-import type { NetListing } from "./types";
+import {
+  allDayHere,
+  comingUp,
+  dailyDays,
+  describeListing,
+  describeMeeting,
+  describeSchedule,
+  meetingTimes,
+  meetsOn,
+  monthlyWeeks,
+  nextMeeting,
+  seasonMark,
+  seasonNote,
+  startsIn,
+  weekView,
+} from "./netSchedule";
+import { linesOf, type NetLine } from "./netSchedule";
+import type { NetListing, NetSession } from "./types";
 
-function listing(overrides: Partial<NetListing> = {}): NetListing {
-  return {
+/** A net with one session, given flat as nets were before sessions; it serves as both the listing and its line. */
+function listing(overrides: Partial<Omit<NetListing, "sessions"> & NetSession> = {}): NetListing & NetLine {
+  const {
+    repeater_id = null,
+    frequency = "146.940",
+    schedule_kind = "weekly",
+    weekdays = [2],
+    weeks = [],
+    all_day = false,
+    start_time = "19:00",
+    end_time = "19:30",
+    season = "",
+    ...shared
+  } = overrides;
+  const session: NetSession = { repeater_id, frequency, schedule_kind, weekdays, weeks, all_day, start_time, end_time, season };
+  const l: NetListing = {
     id: "n1",
     name: "Tuesday Night Net",
     activity_type: "directed_net",
-    repeater_id: null,
-    frequency: "146.940",
-    schedule_kind: "weekly",
-    weekdays: [2],
-    weeks: [],
-    start_time: "19:00",
-    end_time: "19:30",
     checkin_info: "",
     run_by: "",
     notes: "",
     retired_at: "",
-    ...overrides,
+    time_zone: "America/New_York",
+    ...shared,
+    sessions: [session],
   };
+  return { ...linesOf(l)[0], sessions: l.sessions };
 }
 
 /** Local time; October 2026 Thursdays are the 1st, 8th, 15th, 22nd and 29th. */
@@ -67,7 +93,7 @@ describe("nextMeeting (NETL-003, NETL-004, NETL-020)", () => {
 });
 
 describe("weekView (NETL-020)", () => {
-  const ids = (entries: { listing: NetListing }[]) => entries.map((e) => e.listing.id);
+  const ids = (entries: { listing: { id: string } }[]) => entries.map((e) => e.listing.id);
   const LISTINGS = [
     listing({ id: "weekdays", name: "Weekday Net", weekdays: [1, 2, 3, 4, 5], start_time: "07:00", end_time: "07:30" }),
     listing({ id: "now", name: "Monday Net", weekdays: [1] }),
@@ -179,5 +205,164 @@ describe("coming up (NETL-025)", () => {
     expect(startsIn(m(at(3, 10)), now)).toBe("Tomorrow 10:00");
     expect(startsIn(m(at(6, 19)), now)).toBe("Tue 19:00");
     expect(startsIn(m(at(15, 20)), now)).toBe("Thu Oct 15 20:00");
+  });
+});
+
+describe("time zones (NETL-040–045)", () => {
+  const ghost = listing({
+    id: "ghost",
+    name: "GhostNet North America",
+    time_zone: "UTC",
+    weekdays: [3],
+    start_time: "01:00",
+    end_time: "",
+  });
+  const d = (iso: string) => new Date(iso);
+
+  it("lists a UTC net under the weekday it falls on here, moving an hour when daylight-saving time ends", () => {
+    // Monday, October 26, 2026 (EDT): Wednesday 01:00Z is Tuesday 21:00 here.
+    const october = weekView([ghost], new Date(2026, 9, 26, 12));
+    expect(october.days[2].entries.map((e) => e.listing.id)).toEqual(["ghost"]);
+    expect(october.days[3].entries).toEqual([]);
+    expect(october.days[2].entries[0].meeting!.start).toEqual(d("2026-10-28T01:00:00Z"));
+    expect(meetingTimes(ghost, october.days[2].entries[0].meeting)).toBe("21:00 · 01:00Z");
+
+    // Monday, November 16, 2026 (EST): Tuesday 20:00 here.
+    const november = weekView([ghost], new Date(2026, 10, 16, 12));
+    const m = november.days[2].entries[0].meeting!;
+    expect(meetingTimes(ghost, m)).toBe("20:00 · 01:00Z");
+    expect(describeSchedule(ghost)).toBe("Wednesdays 01:00 UTC");
+    expect(describeMeeting(m)).toBe("Tue Nov 17, 20:00 EST · Wed 01:00Z");
+  });
+
+  it("moves a net to another weekday here when daylight-saving time changes it (NETL-043)", () => {
+    const late = listing({ id: "late", time_zone: "UTC", weekdays: [3], start_time: "04:30", end_time: "" });
+    expect(weekView([late], new Date(2026, 9, 26, 12)).days[3].entries[0].meeting!.start).toEqual(
+      new Date(2026, 9, 28, 0, 30)
+    );
+    expect(weekView([late], new Date(2026, 10, 16, 12)).days[2].entries[0].meeting!.start).toEqual(
+      new Date(2026, 10, 17, 23, 30)
+    );
+  });
+
+  it("keeps a net in this computer's zone at its time, with no second time", () => {
+    const tuesday = listing();
+    const before = nextMeeting(tuesday, new Date(2026, 9, 26, 12))!;
+    const after = nextMeeting(tuesday, new Date(2026, 10, 16, 12))!;
+    expect([before.start.getHours(), after.start.getHours()]).toEqual([19, 19]);
+    expect(meetingTimes(tuesday, after)).toBe("19:00–19:30");
+    expect(describeSchedule(tuesday)).toBe("Tuesdays 19:00–19:30");
+    expect(describeMeeting(after)).toBe("Tue Nov 17, 19:00 EST · Wed 00:00Z");
+  });
+
+  it("counts the week of the month in the net's own zone", () => {
+    // 2nd Wednesday at 01:00Z: Tuesday evening here, November 10, 2026.
+    const monthly = listing({ time_zone: "UTC", schedule_kind: "monthly", weekdays: [3], weeks: ["2"], start_time: "01:00", end_time: "" });
+    expect(nextMeeting(monthly, new Date(2026, 10, 1))!.start).toEqual(new Date(2026, 10, 10, 20, 0));
+  });
+
+  it("shows a daily UTC net's days as they fall here", () => {
+    const weekdaysUtc = listing({ time_zone: "UTC", weekdays: [1, 2, 3, 4, 5], start_time: "02:00", end_time: "" });
+    expect(dailyDays(weekdaysUtc, new Date(2026, 10, 16, 12))).toBe("Sun–Thu");
+  });
+
+  it("is still listed on a daylight-saving day (NETL-044)", () => {
+    const early = listing({ weekdays: [0], start_time: "02:30", end_time: "" });
+    expect(nextMeeting(early, new Date(2027, 2, 13, 12))!.start).toEqual(new Date("2027-03-14T07:30:00Z"));
+  });
+});
+
+describe("all day (NETL-004, NETL-028)", () => {
+  const sitrep = listing({ id: "sitrep", name: "SitRepNet", time_zone: "UTC", all_day: true, weekdays: [0, 1, 2, 3, 4, 5, 6], start_time: "", end_time: "" });
+  const wed = listing({ id: "wed", name: "Wednesday All Day", time_zone: "UTC", all_day: true, weekdays: [3], start_time: "", end_time: "" });
+  const monday = new Date(2026, 10, 16, 23, 28);
+
+  it("lists an all-day net first under its heading, never over, never coming up", () => {
+    const early = listing({ id: "early", weekdays: [0, 1, 2, 3, 4, 5, 6], start_time: "00:30", end_time: "01:00" });
+    const week = weekView([early, sitrep], monday);
+    expect(week.daily.map((e) => e.listing.id)).toEqual(["sitrep", "early"]);
+    expect(week.daily[0].overToday).toBe(false);
+    expect(week.daily[1].overToday).toBe(true);
+    expect(meetingTimes(sitrep, week.daily[0].meeting)).toBe("All day");
+    expect(comingUp([sitrep, early], monday).map((e) => e.listing.id)).toEqual(["early"]);
+  });
+
+  it("runs from the start of its day to the start of the next, in its zone", () => {
+    // Wednesday UTC is Tuesday 19:00 to Wednesday 19:00 here in November.
+    const m = nextMeeting(wed, monday)!;
+    expect(m.start).toEqual(new Date(2026, 10, 17, 19, 0));
+    expect(m.end).toEqual(new Date(2026, 10, 18, 19, 0));
+    expect(weekView([wed], monday).days[2].entries.map((e) => e.listing.id)).toEqual(["wed"]);
+    expect(describeSchedule(wed)).toBe("Wednesdays all day UTC");
+    expect(allDayHere(wed, m)).toBe("Tue 19:00 – Wed 19:00 here");
+  });
+
+  it("needs no zone or times when every day", () => {
+    expect(describeSchedule(sitrep)).toBe("Every day, all day");
+    expect(allDayHere(sitrep, nextMeeting(sitrep, monday))).toBe("");
+    const local = listing({ all_day: true, weekdays: [3], start_time: "", end_time: "" });
+    expect(describeSchedule(local)).toBe("Wednesdays all day");
+    expect(allDayHere(local, nextMeeting(local, monday))).toBe("");
+  });
+});
+
+describe("sessions and seasons (NETL-002, NETL-008, NETL-046)", () => {
+  const session = (o: Partial<NetSession>): NetSession => ({
+    repeater_id: null,
+    frequency: "",
+    schedule_kind: "weekly",
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    weeks: [],
+    all_day: false,
+    start_time: "20:00",
+    end_time: "",
+    season: "",
+    ...o,
+  });
+  const net = (id: string, sessions: NetSession[]): NetListing => ({
+    id,
+    name: id,
+    activity_type: "directed_net",
+    run_by: "",
+    checkin_info: "",
+    notes: "",
+    retired_at: "",
+    time_zone: "UTC",
+    sessions,
+  });
+  const monday = new Date(2026, 10, 16, 12);
+
+  it("lists each session on its own line, under its own days", () => {
+    const ahrn = net("AHRN", [
+      session({ frequency: "14.115 JS8", weekdays: [6], start_time: "22:30" }),
+      session({ frequency: "7.115 Contestia", weekdays: [6], start_time: "23:00" }),
+      session({ frequency: "3.564", start_time: "03:00" }),
+    ]);
+    const week = weekView([ahrn], monday);
+    expect(week.daily.map((e) => [e.listing.key, e.listing.frequency])).toEqual([["AHRN#2", "3.564"]]);
+    expect(week.days[6].entries.map((e) => e.listing.frequency)).toEqual(["14.115 JS8", "7.115 Contestia"]);
+    expect(week.days[6].entries.map((e) => e.listing.id)).toEqual(["AHRN", "AHRN"]);
+    expect(linesOf(ahrn).map((l) => l.session)).toEqual([0, 1, 2]);
+  });
+
+  it("lists only the session in season, by daylight-saving time here for a UTC net", () => {
+    const tx1 = net("4TX1", [
+      session({ frequency: "4.875 USB", season: "summer" }),
+      session({ frequency: "3.299 USB", season: "winter" }),
+    ]);
+    const freqs = (now: Date) => weekView([tx1], now).daily.map((e) => e.listing.frequency);
+    expect(freqs(monday)).toEqual(["3.299 USB"]);
+    expect(freqs(new Date(2026, 6, 1, 12))).toEqual(["4.875 USB"]);
+    expect(comingUp([tx1], new Date(2026, 10, 16, 14)).map((e) => e.listing.frequency)).toEqual(["3.299 USB"]);
+
+    const [summer, winter] = linesOf(tx1);
+    expect(seasonNote(summer, monday)).toBe("Summer only · from Mar 14");
+    expect(seasonNote(winter, monday)).toBe("Winter only");
+    expect(seasonMark(summer, monday)).toBe("");
+  });
+
+  it("describes a whole listing, session by session", () => {
+    const l = net("Two", [session({ weekdays: [2] }), session({ weekdays: [4], start_time: "21:00" })]);
+    expect(describeListing(l)).toBe("Tuesdays 20:00 UTC; Thursdays 21:00 UTC");
   });
 });

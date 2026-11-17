@@ -112,6 +112,12 @@ describe("changes", () => {
       "title “a” → “b”, name “b” → “c”, mode “FM” → “DMR” and 1 more"
     );
     expect(changes({ title: "same" }, { title: "same" })).toBe("");
+    // A net's one session reads as its own fields; several, as "frequencies and schedules" (NETL-009).
+    const s = { start_time: "19:00", weekdays: [2] };
+    expect(changes({ name: "Net", sessions: [s] }, { name: "Net", sessions: [{ ...s, start_time: "19:30" }] })).toBe(
+      "start time “19:00” → “19:30”"
+    );
+    expect(changes({ sessions: [s, s] }, { sessions: [s, { ...s, start_time: "20:00" }] })).toBe("frequencies and schedules");
   });
 });
 

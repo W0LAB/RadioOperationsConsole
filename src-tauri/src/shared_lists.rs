@@ -8,7 +8,7 @@
 //! Importing only adds. A repeater or net already in use here is left as it
 //! is, so nothing the operator has entered or linked is changed.
 
-use crate::net_listings::{self, NetListingDetails};
+use crate::net_listings::{self, NetListingDetails, NetSession};
 use crate::repeaters::{self, RepeaterDetails};
 use crate::repo::Repository;
 use chrono::Utc;
@@ -19,7 +19,14 @@ use std::path::Path;
 
 /// The file layout this version writes and reads. A file with a higher
 /// number came from a newer version of the app.
-const FORMAT: i64 = 1;
+///
+/// 2: nets carry their time zone (SHARE-005). A net from a format 1 file is
+/// read in the importing computer's zone (SHARE-016).
+/// 3: nets say whether they're all day (NETL-004); before, one kept as
+/// 00:00–23:59 becomes all day as it's checked (NETL-049).
+/// 4: a row per session, with its season; rows of the same name are one
+/// net (SHARE-005). Older lists are read the same way (SHARE-016).
+const FORMAT: i64 = 4;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
@@ -64,6 +71,9 @@ pub struct ImportSummary {
     pub unreadable: usize,
     /// When the file was made (RFC 3339).
     pub exported_at: String,
+    /// The zone a net list's times are read in because the file is from
+    /// before nets had one (SHARE-016); empty otherwise.
+    pub time_zone_assumed: String,
 }
 
 /// Whether `conn` is one of these list files, of any kind.
@@ -97,7 +107,8 @@ fn create_file(live: &Connection, dest: &Path, kind: Kind) -> Result<Connection,
              mode TEXT NOT NULL, location_label TEXT NOT NULL, location_lat REAL, location_lon REAL, notes TEXT NOT NULL);
          CREATE TABLE nets (name TEXT NOT NULL, activity_type TEXT NOT NULL, frequency TEXT NOT NULL,
              schedule_kind TEXT NOT NULL, weekdays TEXT NOT NULL, weeks TEXT NOT NULL, start_time TEXT NOT NULL,
-             end_time TEXT NOT NULL, run_by TEXT NOT NULL, checkin_info TEXT NOT NULL, notes TEXT NOT NULL);",
+             end_time TEXT NOT NULL, run_by TEXT NOT NULL, checkin_info TEXT NOT NULL, notes TEXT NOT NULL,
+             time_zone TEXT NOT NULL, all_day INTEGER NOT NULL, season TEXT NOT NULL);",
     )
     .map_err(|e| e.to_string())?;
     out.execute(
@@ -114,7 +125,7 @@ fn join<T: ToString>(v: &[T]) -> String {
 
 /// A net's frequency as text alone: its repeater's name and one-line form
 /// when it's on one, else its own frequency text.
-fn net_frequency(repo: &Repository, d: &NetListingDetails) -> String {
+fn net_frequency(repo: &Repository, d: &NetSession) -> String {
     match d.repeater_id.as_deref().and_then(|id| repo.get_repeater(id).ok()) {
         Some(r) => format!("{} {}", r.details.name, repeaters::one_line(&r.details)),
         None => d.frequency.clone(),
@@ -140,13 +151,16 @@ pub fn export(repo: &Repository, dest: &Path, kind: Kind) -> Result<usize, Strin
         }
         Kind::Nets => {
             let list = repo.list_net_listings(false).map_err(|e| e.to_string())?;
+            // A row per session, in order, each with its listing's text (SHARE-005).
             for l in &list {
                 let d = &l.details;
-                tx.execute(
-                    "INSERT INTO nets VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
-                    params![d.name, d.activity_type, net_frequency(repo, d), d.schedule_kind, join(&d.weekdays), join(&d.weeks), d.start_time, d.end_time, d.run_by, d.checkin_info, d.notes],
-                )
-                .map_err(|e| e.to_string())?;
+                for s in &d.sessions {
+                    tx.execute(
+                        "INSERT INTO nets VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)",
+                        params![d.name, d.activity_type, net_frequency(repo, s), s.schedule_kind, join(&s.weekdays), join(&s.weeks), s.start_time, s.end_time, d.run_by, d.checkin_info, d.notes, d.time_zone, s.all_day, s.season],
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
             }
             list.len()
         }
@@ -160,11 +174,13 @@ pub fn export(repo: &Repository, dest: &Path, kind: Kind) -> Result<usize, Strin
 struct Contents<T> {
     entries: Vec<Option<T>>,
     exported_at: String,
+    /// See `ImportSummary::time_zone_assumed`.
+    time_zone_assumed: String,
 }
 
 /// Opens `path` read-only and checks it's a list of this `kind` that this
 /// version can read.
-fn open_list(path: &Path, kind: Kind) -> Result<(Connection, String), String> {
+fn open_list(path: &Path, kind: Kind) -> Result<(Connection, String, i64), String> {
     let not_ours = || format!("That isn't a {} from Radio Operations Console.", kind.noun());
     if !path.is_file() {
         return Err("That file doesn't exist.".into());
@@ -185,11 +201,11 @@ fn open_list(path: &Path, kind: Kind) -> Result<(Connection, String), String> {
         let other = Kind::parse(&file_kind).map(Kind::noun).unwrap_or("different list");
         return Err(format!("That's a {other}, not a {}.", kind.noun()));
     }
-    Ok((conn, exported_at))
+    Ok((conn, exported_at, format))
 }
 
 fn read_repeaters(path: &Path) -> Result<Contents<RepeaterDetails>, String> {
-    let (conn, exported_at) = open_list(path, Kind::Repeaters)?;
+    let (conn, exported_at, _) = open_list(path, Kind::Repeaters)?;
     let mut stmt = conn
         .prepare("SELECT name, output_mhz, offset_mhz, tone_in_kind, tone_in, tone_out_kind, tone_out, mode, location_label, location_lat, location_lon, notes FROM repeaters")
         .map_err(|e| e.to_string())?;
@@ -213,37 +229,114 @@ fn read_repeaters(path: &Path) -> Result<Contents<RepeaterDetails>, String> {
         .map_err(|e| e.to_string())?
         .map(|row| row.ok().and_then(|d| repeaters::clean(d).ok()))
         .collect();
-    Ok(Contents { entries, exported_at })
+    Ok(Contents { entries, exported_at, time_zone_assumed: String::new() })
 }
 
-fn read_nets(path: &Path) -> Result<Contents<NetListingDetails>, String> {
-    let (conn, exported_at) = open_list(path, Kind::Nets)?;
+/// One row of a net list: one session, with its listing's text alongside.
+struct NetRow {
+    listing: NetListingDetails,
+    session: NetSession,
+}
+
+/// A net list's nets; one from before nets had a time zone is read in
+/// `local_zone`, this computer's (SHARE-016). Rows of the same name are one
+/// net's sessions, in order (SHARE-005, SHARE-016); where their notes
+/// differ, each is kept in the net's notes after its frequency.
+fn read_nets(path: &Path, local_zone: &str) -> Result<Contents<NetListingDetails>, String> {
+    let (conn, exported_at, format) = open_list(path, Kind::Nets)?;
+    let zone_column = if format >= 2 { "time_zone" } else { "''" };
+    let all_day_column = if format >= 3 { "all_day" } else { "0" };
+    let season_column = if format >= 4 { "season" } else { "''" };
     let mut stmt = conn
-        .prepare("SELECT name, activity_type, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, checkin_info, notes FROM nets")
+        .prepare(&format!("SELECT name, activity_type, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, checkin_info, notes, {zone_column}, {all_day_column}, {season_column} FROM nets ORDER BY rowid"))
         .map_err(|e| e.to_string())?;
-    let entries = stmt
+    let rows: Vec<Option<NetRow>> = stmt
         .query_map([], |r| {
             let weekdays: String = r.get(4)?;
             let weeks: String = r.get(5)?;
-            Ok(NetListingDetails {
-                name: r.get(0)?,
-                activity_type: r.get(1)?,
-                repeater_id: None,
-                frequency: r.get(2)?,
-                schedule_kind: r.get(3)?,
-                weekdays: weekdays.split(',').filter_map(|w| w.trim().parse().ok()).collect(),
-                weeks: weeks.split(',').map(str::trim).filter(|w| !w.is_empty()).map(String::from).collect(),
-                start_time: r.get(6)?,
-                end_time: r.get(7)?,
-                run_by: r.get(8)?,
-                checkin_info: r.get(9)?,
-                notes: r.get(10)?,
+            Ok(NetRow {
+                listing: NetListingDetails {
+                    name: r.get(0)?,
+                    activity_type: r.get(1)?,
+                    run_by: r.get(8)?,
+                    checkin_info: r.get(9)?,
+                    notes: r.get(10)?,
+                    time_zone: r.get(11)?,
+                    sessions: Vec::new(),
+                },
+                session: NetSession {
+                    repeater_id: None,
+                    frequency: r.get(2)?,
+                    schedule_kind: r.get(3)?,
+                    weekdays: weekdays.split(',').filter_map(|w| w.trim().parse().ok()).collect(),
+                    weeks: weeks.split(',').map(str::trim).filter(|w| !w.is_empty()).map(String::from).collect(),
+                    start_time: r.get(6)?,
+                    end_time: r.get(7)?,
+                    all_day: r.get(12)?,
+                    season: r.get(13)?,
+                },
             })
         })
         .map_err(|e| e.to_string())?
-        .map(|row| row.ok().and_then(|d| net_listings::clean(d).ok()))
+        .map(Result::ok)
         .collect();
-    Ok(Contents { entries, exported_at })
+
+    // Group by name, in the order first met; a row that couldn't be read is its own (unreadable) entry.
+    let mut groups: Vec<Option<Vec<NetRow>>> = Vec::new();
+    let mut index: std::collections::HashMap<String, usize> = Default::default();
+    for row in rows {
+        match row {
+            None => groups.push(None),
+            Some(row) => {
+                let key = row.listing.name.trim().to_lowercase();
+                match index.get(&key) {
+                    Some(&i) => groups[i].as_mut().expect("a named group").push(row),
+                    None => {
+                        index.insert(key, groups.len());
+                        groups.push(Some(vec![row]));
+                    }
+                }
+            }
+        }
+    }
+
+    let mut assumed = false;
+    let entries = groups
+        .into_iter()
+        .map(|group| {
+            let rows = group?;
+            let mut d = rows[0].listing.clone();
+            if d.time_zone.trim().is_empty() {
+                d.time_zone = local_zone.to_string();
+                assumed = true;
+            }
+            // Where the rows' notes differ, keep each after its frequency.
+            if rows.iter().any(|r| r.listing.notes.trim() != d.notes.trim()) {
+                d.notes = rows
+                    .iter()
+                    .filter(|r| !r.listing.notes.trim().is_empty())
+                    .map(|r| format!("{}: {}", r.session.frequency.trim(), r.listing.notes.trim()))
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+            }
+            if d.run_by.trim().is_empty() {
+                d.run_by = rows.iter().map(|r| r.listing.run_by.trim()).find(|s| !s.is_empty()).unwrap_or("").to_string();
+            }
+            if d.checkin_info.trim().is_empty() {
+                d.checkin_info =
+                    rows.iter().map(|r| r.listing.checkin_info.trim()).find(|s| !s.is_empty()).unwrap_or("").to_string();
+            }
+            // The same session twice is one (SHARE-013).
+            for r in rows {
+                if !d.sessions.contains(&r.session) {
+                    d.sessions.push(r.session);
+                }
+            }
+            net_listings::clean(d).ok()
+        })
+        .collect();
+    let time_zone_assumed = if assumed { local_zone.to_string() } else { String::new() };
+    Ok(Contents { entries, exported_at, time_zone_assumed })
 }
 
 /// How a repeater is recognised as one already here: its name and output frequency.
@@ -266,6 +359,7 @@ fn plan<T>(
     let mut summary = ImportSummary {
         total: contents.entries.len(),
         exported_at: contents.exported_at,
+        time_zone_assumed: contents.time_zone_assumed,
         ..Default::default()
     };
     let mut add = Vec::new();
@@ -286,17 +380,22 @@ fn repeater_plan(repo: &Repository, path: &Path) -> Result<(Vec<RepeaterDetails>
     Ok(plan(contents, here.iter().map(|r| repeater_key(&r.details)).collect(), repeater_key))
 }
 
-fn net_plan(repo: &Repository, path: &Path) -> Result<(Vec<NetListingDetails>, ImportSummary), String> {
-    let contents = read_nets(path)?;
+fn net_plan(
+    repo: &Repository,
+    path: &Path,
+    local_zone: &str,
+) -> Result<(Vec<NetListingDetails>, ImportSummary), String> {
+    let contents = read_nets(path, local_zone)?;
     let here = repo.list_net_listings(false).map_err(|e| e.to_string())?;
     Ok(plan(contents, here.iter().map(|l| net_key(&l.details)).collect(), net_key))
 }
 
-/// What importing `path` would do, without changing anything.
-pub fn inspect(repo: &Repository, path: &Path, kind: Kind) -> Result<ImportSummary, String> {
+/// What importing `path` would do, without changing anything. `local_zone`
+/// is this computer's time zone, for nets from older files (SHARE-016).
+pub fn inspect(repo: &Repository, path: &Path, kind: Kind, local_zone: &str) -> Result<ImportSummary, String> {
     match kind {
         Kind::Repeaters => repeater_plan(repo, path).map(|(_, s)| s),
-        Kind::Nets => net_plan(repo, path).map(|(_, s)| s),
+        Kind::Nets => net_plan(repo, path, local_zone).map(|(_, s)| s),
     }
 }
 
@@ -306,6 +405,7 @@ pub fn import(
     repo: &Repository,
     path: &Path,
     kind: Kind,
+    local_zone: &str,
     operator_id: Option<&str>,
 ) -> Result<ImportSummary, String> {
     let tx = repo.conn.unchecked_transaction().map_err(|e| e.to_string())?;
@@ -321,7 +421,7 @@ pub fn import(
             summary
         }
         Kind::Nets => {
-            let (add, summary) = net_plan(repo, path)?;
+            let (add, summary) = net_plan(repo, path, local_zone)?;
             for d in add {
                 let id = repo.create_net_listing(&d).map_err(|e| e.to_string())?;
                 let data = serde_json::json!({ "after": d }).to_string();
@@ -369,15 +469,19 @@ mod tests {
         net_listings::clean(NetListingDetails {
             name: name.into(),
             activity_type: "directed_net".into(),
-            repeater_id,
-            frequency: "146.520 simplex".into(),
-            schedule_kind: "monthly".into(),
-            weekdays: vec![4],
-            weeks: vec!["2".into(), "last".into()],
-            start_time: "19:00".into(),
-            end_time: "19:30".into(),
             run_by: "Orange County ARES".into(),
             checkin_info: "Call sign and name".into(),
+            time_zone: "America/New_York".into(),
+            sessions: vec![NetSession {
+                repeater_id,
+                frequency: "146.520 simplex".into(),
+                schedule_kind: "monthly".into(),
+                weekdays: vec![4],
+                weeks: vec!["2".into(), "last".into()],
+                start_time: "19:00".into(),
+                end_time: "19:30".into(),
+                ..Default::default()
+            }],
             ..Default::default()
         })
         .unwrap()
@@ -394,11 +498,11 @@ mod tests {
         assert_eq!(export(&from, &file, Kind::Repeaters).unwrap(), 1, "retired ones stay behind");
 
         let to = repo();
-        let preview = inspect(&to, &file, Kind::Repeaters).unwrap();
+        let preview = inspect(&to, &file, Kind::Repeaters, "UTC").unwrap();
         assert_eq!((preview.total, preview.new, preview.already_here), (1, 1, 0));
         assert!(to.list_repeaters(false).unwrap().is_empty(), "inspecting changes nothing");
 
-        import(&to, &file, Kind::Repeaters, None).unwrap();
+        import(&to, &file, Kind::Repeaters, "UTC", None).unwrap();
         let got = to.list_repeaters(false).unwrap();
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].details, w4abc());
@@ -415,16 +519,120 @@ mod tests {
         assert_eq!(export(&from, &file, Kind::Nets).unwrap(), 2);
 
         let to = repo();
-        import(&to, &file, Kind::Nets, None).unwrap();
+        import(&to, &file, Kind::Nets, "UTC", None).unwrap();
         let got = to.list_net_listings(false).unwrap();
         assert_eq!(got.len(), 2);
         let ares = &got[0].details;
-        assert_eq!(ares.repeater_id, None);
-        assert_eq!(ares.frequency, "W4ABC Orlando 146.940 -0.600 PL 100.0");
-        assert_eq!((ares.weekdays.clone(), ares.weeks.clone()), (vec![4], vec!["2".to_string(), "last".to_string()]));
+        let s = &ares.sessions[0];
+        assert_eq!(s.repeater_id, None);
+        assert_eq!(s.frequency, "W4ABC Orlando 146.940 -0.600 PL 100.0");
+        assert_eq!((s.weekdays.clone(), s.weeks.clone()), (vec![4], vec!["2".to_string(), "last".to_string()]));
         assert_eq!(ares.checkin_info, "Call sign and name");
-        assert_eq!(got[1].details.frequency, "146.520 simplex");
+        assert_eq!(got[1].details.sessions[0].frequency, "146.520 simplex");
         assert!(to.list_repeaters(false).unwrap().is_empty(), "no repeater comes with it");
+    }
+
+    #[test]
+    fn a_net_keeps_its_time_zone_and_older_lists_take_this_computers() {
+        // SHARE-005
+        let from = repo();
+        let mut utc = net("GhostNet", None);
+        utc.time_zone = "UTC".into();
+        from.create_net_listing(&utc).unwrap();
+        from.create_net_listing(&net("Tuesday Net", None)).unwrap();
+        let file = temp("nets.db");
+        export(&from, &file, Kind::Nets).unwrap();
+
+        let to = repo();
+        let preview = inspect(&to, &file, Kind::Nets, "America/Chicago").unwrap();
+        assert_eq!(preview.time_zone_assumed, "", "nothing is assumed");
+        import(&to, &file, Kind::Nets, "America/Chicago", None).unwrap();
+        let zones: Vec<_> = to.list_net_listings(false).unwrap().into_iter().map(|l| l.details.time_zone).collect();
+        assert_eq!(zones, ["UTC", "America/New_York"]);
+
+        // SHARE-016: a list from before time zones is read in this computer's.
+        let old = temp("old-nets.db");
+        export(&from, &old, Kind::Nets).unwrap();
+        let c = Connection::open(&old).unwrap();
+        c.execute_batch("ALTER TABLE nets DROP COLUMN time_zone; ALTER TABLE nets DROP COLUMN all_day; ALTER TABLE nets DROP COLUMN season; UPDATE shared_list SET format = 1;").unwrap();
+        drop(c);
+        let fresh = repo();
+        let preview = inspect(&fresh, &old, Kind::Nets, "America/Chicago").unwrap();
+        assert_eq!((preview.new, preview.time_zone_assumed.as_str()), (2, "America/Chicago"));
+        import(&fresh, &old, Kind::Nets, "America/Chicago", None).unwrap();
+        assert!(fresh.list_net_listings(false).unwrap().iter().all(|l| l.details.time_zone == "America/Chicago"));
+    }
+
+    #[test]
+    fn all_day_nets_go_as_they_are_and_older_00_00_to_23_59_become_all_day() {
+        // NETL-004, NETL-049, SHARE-016
+        let from = repo();
+        let mut always = net("SitRepNet", None);
+        let s = &mut always.sessions[0];
+        (s.schedule_kind, s.weeks, s.weekdays, s.all_day) = ("weekly".into(), vec![], vec![0, 1, 2, 3, 4, 5, 6], true);
+        from.create_net_listing(&net_listings::clean(always).unwrap()).unwrap();
+        let file = temp("nets.db");
+        export(&from, &file, Kind::Nets).unwrap();
+        let to = repo();
+        import(&to, &file, Kind::Nets, "UTC", None).unwrap();
+        assert!(to.list_net_listings(false).unwrap()[0].details.sessions[0].all_day);
+
+        // A format 2 list has no all-day; 00:00–23:59 stands for it.
+        let c = Connection::open(&file).unwrap();
+        c.execute_batch("UPDATE nets SET start_time = '00:00', end_time = '23:59'; ALTER TABLE nets DROP COLUMN all_day; ALTER TABLE nets DROP COLUMN season; UPDATE shared_list SET format = 2;").unwrap();
+        drop(c);
+        let older = repo();
+        import(&older, &file, Kind::Nets, "UTC", None).unwrap();
+        let got = &older.list_net_listings(false).unwrap()[0].details.sessions[0];
+        assert!(got.all_day && got.start_time.is_empty());
+    }
+
+    #[test]
+    fn sessions_go_a_row_each_and_come_back_as_one_net() {
+        // SHARE-005
+        let from = repo();
+        let mut d = net("AHRN", None);
+        d.sessions.push(net_listings::clean_session(NetSession { frequency: "7.115".into(), season: "summer".into(), ..d.sessions[0].clone() }).unwrap());
+        from.create_net_listing(&d).unwrap();
+        let file = temp("nets.db");
+        export(&from, &file, Kind::Nets).unwrap();
+        let rows: i64 = Connection::open(&file).unwrap().query_row("SELECT COUNT(*) FROM nets", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 2);
+
+        let to = repo();
+        let preview = inspect(&to, &file, Kind::Nets, "UTC").unwrap();
+        assert_eq!((preview.total, preview.new), (1, 1));
+        import(&to, &file, Kind::Nets, "UTC", None).unwrap();
+        let got = &to.list_net_listings(false).unwrap()[0].details;
+        assert_eq!(got.sessions.len(), 2);
+        assert_eq!((got.sessions[1].frequency.as_str(), got.sessions[1].season.as_str()), ("7.115", "summer"));
+        assert_eq!(got.notes, d.notes, "the same notes stay as they are");
+    }
+
+    #[test]
+    fn an_older_list_s_rows_of_one_name_become_sessions_keeping_each_ones_notes() {
+        // SHARE-016: as Updated_Net_Database.db holds the AHRN (AmCon Ham Radio Net).
+        let from = repo();
+        let mut a = net("AHRN", None);
+        a.notes = "Coverage: NA".into();
+        a.sessions[0].frequency = "14.115 JS8".into();
+        from.create_net_listing(&a).unwrap();
+        let mut b = net("Other", None);
+        b.notes = "Coverage: NA – E".into();
+        b.sessions[0].frequency = "7.115 Contestia".into();
+        from.create_net_listing(&b).unwrap();
+        let file = temp("old.db");
+        export(&from, &file, Kind::Nets).unwrap();
+        let c = Connection::open(&file).unwrap();
+        c.execute_batch("UPDATE nets SET name = 'AHRN'; ALTER TABLE nets DROP COLUMN season; UPDATE shared_list SET format = 3;").unwrap();
+        drop(c);
+
+        let to = repo();
+        let done = import(&to, &file, Kind::Nets, "UTC", None).unwrap();
+        assert_eq!((done.total, done.new), (1, 1));
+        let got = &to.list_net_listings(false).unwrap()[0].details;
+        assert_eq!(got.sessions.iter().map(|s| s.frequency.as_str()).collect::<Vec<_>>(), ["14.115 JS8", "7.115 Contestia"]);
+        assert_eq!(got.notes, "14.115 JS8: Coverage: NA / 7.115 Contestia: Coverage: NA – E");
     }
 
     #[test]
@@ -440,14 +648,14 @@ mod tests {
         mine.notes = "My own notes".into();
         to.create_net_listing(&mine).unwrap();
 
-        let done = import(&to, &file, Kind::Nets, None).unwrap();
+        let done = import(&to, &file, Kind::Nets, "UTC", None).unwrap();
         assert_eq!((done.new, done.already_here), (1, 1));
         let names: Vec<_> = to.list_net_listings(false).unwrap().into_iter().map(|l| l.details).collect();
         assert_eq!(names.len(), 2);
         assert_eq!(names[0].notes, "My own notes", "what's here is left as it is");
 
         // A second import adds nothing.
-        let again = import(&to, &file, Kind::Nets, None).unwrap();
+        let again = import(&to, &file, Kind::Nets, "UTC", None).unwrap();
         assert_eq!((again.new, again.already_here), (0, 2));
     }
 
@@ -463,7 +671,7 @@ mod tests {
             .unwrap();
 
         let to = repo();
-        let done = import(&to, &file, Kind::Repeaters, None).unwrap();
+        let done = import(&to, &file, Kind::Repeaters, "UTC", None).unwrap();
         assert_eq!((done.total, done.new, done.unreadable), (2, 1, 1));
     }
 
@@ -472,21 +680,21 @@ mod tests {
         let r = repo();
         let nets = temp("nets.db");
         export(&r, &nets, Kind::Nets).unwrap();
-        let err = inspect(&r, &nets, Kind::Repeaters).unwrap_err();
+        let err = inspect(&r, &nets, Kind::Repeaters, "UTC").unwrap_err();
         assert!(err.contains("net list, not a repeater list"), "{err}");
 
         // A whole-database backup isn't a list, and a list isn't a backup.
         let backup = temp("backup.db");
         crate::backup::create_backup(&r.conn, &backup).unwrap();
-        assert!(inspect(&r, &backup, Kind::Nets).unwrap_err().contains("isn't a net list"));
+        assert!(inspect(&r, &backup, Kind::Nets, "UTC").unwrap_err().contains("isn't a net list"));
         assert!(crate::backup::inspect(&nets).unwrap_err().contains("not a backup"));
 
         let junk = temp("junk.db");
         std::fs::write(&junk, b"not a database").unwrap();
-        assert!(inspect(&r, &junk, Kind::Nets).is_err());
+        assert!(inspect(&r, &junk, Kind::Nets, "UTC").is_err());
 
         Connection::open(&nets).unwrap().execute("UPDATE shared_list SET format = 99", []).unwrap();
-        assert!(inspect(&r, &nets, Kind::Nets).unwrap_err().contains("newer version"));
+        assert!(inspect(&r, &nets, Kind::Nets, "UTC").unwrap_err().contains("newer version"));
     }
 
     #[test]

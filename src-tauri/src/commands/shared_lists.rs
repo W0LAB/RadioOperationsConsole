@@ -1,4 +1,5 @@
 use super::AppState;
+use crate::net_listings::local_time_zone;
 use crate::shared_lists::{self, ImportSummary, Kind};
 use std::path::Path;
 use tauri::State;
@@ -15,7 +16,7 @@ pub fn export_list(state: State<AppState>, kind: String, path: String) -> Result
 #[tauri::command]
 pub fn inspect_list(state: State<AppState>, kind: String, path: String) -> Result<ImportSummary, String> {
     let repo = state.repo.lock().unwrap();
-    shared_lists::inspect(&repo, Path::new(&path), Kind::parse(&kind)?)
+    shared_lists::inspect(&repo, Path::new(&path), Kind::parse(&kind)?, &local_time_zone())
 }
 
 /// Adds the entries in the list file at `path` that aren't here yet.
@@ -27,5 +28,5 @@ pub fn import_list(
     operator_id: Option<String>,
 ) -> Result<ImportSummary, String> {
     let repo = state.repo.lock().unwrap();
-    shared_lists::import(&repo, Path::new(&path), Kind::parse(&kind)?, operator_id.as_deref())
+    shared_lists::import(&repo, Path::new(&path), Kind::parse(&kind)?, &local_time_zone(), operator_id.as_deref())
 }

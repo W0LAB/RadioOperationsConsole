@@ -27,11 +27,16 @@ but for one list at a time, and an import only ever adds.
 - **SHARE-002:** A list MUST be one file holding only the text of the
   repeaters or nets in use: no retired ones, no history, no ids, and nothing
   else from the app. Repeaters and nets are separate files.
-- **SHARE-003:** A net MUST NOT carry a link to a repeater. A net on a
+- **SHARE-003:** A net MUST NOT carry a link to a repeater. A session on a
   repeater MUST be written with the repeater's name and one-line form as its
   frequency text ("W4ABC Orlando 146.940 -0.600 PL 100.0"), so whoever imports
   it can read it and link it to a repeater of their own if they want.
 - **SHARE-004:** Export MUST refuse to write over the app's own database.
+- **SHARE-005:** A net MUST be written with its time zone by name
+  (`NETL-040`) and all of its sessions, each with its schedule and season,
+  so it means the same on a computer in another zone. Each session is a row
+  of its own, with the net's name and text alongside, and rows of the same
+  name are read back as one net's sessions, in order.
 
 ## Importing
 
@@ -49,10 +54,20 @@ but for one list at a time, and an import only ever adds.
   here and MUST be left as it is, so nothing the operator entered, edited or
   linked is changed. Entries repeated within the file are added once.
 - **SHARE-014:** Every entry MUST be checked as if typed in by hand
-  (`RPT-001`–`004`, `NETL-001`–`005`). One that doesn't pass is skipped and
-  counted, and the rest are imported.
+  (`RPT-001`–`004`, `NETL-001`–`005`, `NETL-008`, `NETL-040`). One that
+  doesn't pass is skipped and counted, and the rest are imported.
 - **SHARE-015:** An import MUST be all or nothing, and each entry it adds
   MUST be recorded in the history, like one added by hand.
+- **SHARE-016:** A net list made before time zones and sessions existed
+  MUST still import, in the importing computer's zone, and a session
+  running 00:00–23:59 becomes all day (as `NETL-047` and `NETL-049` do on
+  upgrade). Rows of the same name become one net's sessions, as in
+  `SHARE-005`; such a list had no other way to hold a net on two bands.
+  Where those rows' notes differ, each MUST be kept in the net's notes after
+  its frequency ("14.115 JS8: … / 7.115 Contestia: …"), so nothing is lost. The
+  confirmation MUST say so ("Times in this list are read as
+  America/Chicago.") so the operator can correct them afterward
+  (`NETL-041`).
 
 ## Not in scope
 

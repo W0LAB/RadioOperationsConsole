@@ -21,6 +21,9 @@ serde_json = "1.0"
 rusqlite = { version = "0.31", features = ["bundled", "backup"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
+# This computer's time zone by name, for net listings (NETL-047); already
+# in the build through chrono.
+iana-time-zone = "0.1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 quick-xml = "0.36"
 zip = { version = "2", default-features = false, features = ["deflate"] }
