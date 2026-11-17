@@ -65,6 +65,7 @@ const FIELD_NAMES: Record<string, string> = {
   schedule_kind: "schedule",
   weekdays: "days",
   weeks: "weeks",
+  all_day: "all day",
   start_time: "start time",
   end_time: "end time",
   time_zone: "time zone",

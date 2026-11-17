@@ -127,7 +127,9 @@ export interface NetListingDetails {
   weekdays: number[];
   /** Monthly only: "1"–"4" or "last". */
   weeks: string[];
-  /** "HH:MM" in `time_zone`; "" for as needed. */
+  /** On the air the whole day it meets, with no times (NETL-004). */
+  all_day: boolean;
+  /** "HH:MM" in `time_zone`; "" for as needed or all day. */
   start_time: string;
   /** Optional "HH:MM" in `time_zone`. */
   end_time: string;

@@ -22,7 +22,9 @@ use std::path::Path;
 ///
 /// 2: nets carry their time zone (SHARE-005). A net from a format 1 file is
 /// read in the importing computer's zone (SHARE-016).
-const FORMAT: i64 = 2;
+/// 3: nets say whether they're all day (NETL-004); before, one kept as
+/// 00:00–23:59 becomes all day as it's checked (NETL-049).
+const FORMAT: i64 = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
@@ -104,7 +106,7 @@ fn create_file(live: &Connection, dest: &Path, kind: Kind) -> Result<Connection,
          CREATE TABLE nets (name TEXT NOT NULL, activity_type TEXT NOT NULL, frequency TEXT NOT NULL,
              schedule_kind TEXT NOT NULL, weekdays TEXT NOT NULL, weeks TEXT NOT NULL, start_time TEXT NOT NULL,
              end_time TEXT NOT NULL, run_by TEXT NOT NULL, checkin_info TEXT NOT NULL, notes TEXT NOT NULL,
-             time_zone TEXT NOT NULL);",
+             time_zone TEXT NOT NULL, all_day INTEGER NOT NULL);",
     )
     .map_err(|e| e.to_string())?;
     out.execute(
@@ -150,8 +152,8 @@ pub fn export(repo: &Repository, dest: &Path, kind: Kind) -> Result<usize, Strin
             for l in &list {
                 let d = &l.details;
                 tx.execute(
-                    "INSERT INTO nets VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
-                    params![d.name, d.activity_type, net_frequency(repo, d), d.schedule_kind, join(&d.weekdays), join(&d.weeks), d.start_time, d.end_time, d.run_by, d.checkin_info, d.notes, d.time_zone],
+                    "INSERT INTO nets VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
+                    params![d.name, d.activity_type, net_frequency(repo, d), d.schedule_kind, join(&d.weekdays), join(&d.weeks), d.start_time, d.end_time, d.run_by, d.checkin_info, d.notes, d.time_zone, d.all_day],
                 )
                 .map_err(|e| e.to_string())?;
             }
@@ -230,8 +232,9 @@ fn read_repeaters(path: &Path) -> Result<Contents<RepeaterDetails>, String> {
 fn read_nets(path: &Path, local_zone: &str) -> Result<Contents<NetListingDetails>, String> {
     let (conn, exported_at, format) = open_list(path, Kind::Nets)?;
     let zone_column = if format >= 2 { "time_zone" } else { "''" };
+    let all_day_column = if format >= 3 { "all_day" } else { "0" };
     let mut stmt = conn
-        .prepare(&format!("SELECT name, activity_type, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, checkin_info, notes, {zone_column} FROM nets"))
+        .prepare(&format!("SELECT name, activity_type, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, checkin_info, notes, {zone_column}, {all_day_column} FROM nets"))
         .map_err(|e| e.to_string())?;
     let mut assumed = false;
     let entries = stmt
@@ -252,6 +255,7 @@ fn read_nets(path: &Path, local_zone: &str) -> Result<Contents<NetListingDetails
                 checkin_info: r.get(9)?,
                 notes: r.get(10)?,
                 time_zone: r.get(11)?,
+                all_day: r.get(12)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -479,13 +483,37 @@ mod tests {
         let old = temp("old-nets.db");
         export(&from, &old, Kind::Nets).unwrap();
         let c = Connection::open(&old).unwrap();
-        c.execute_batch("ALTER TABLE nets DROP COLUMN time_zone; UPDATE shared_list SET format = 1;").unwrap();
+        c.execute_batch("ALTER TABLE nets DROP COLUMN time_zone; ALTER TABLE nets DROP COLUMN all_day; UPDATE shared_list SET format = 1;").unwrap();
         drop(c);
         let fresh = repo();
         let preview = inspect(&fresh, &old, Kind::Nets, "America/Chicago").unwrap();
         assert_eq!((preview.new, preview.time_zone_assumed.as_str()), (2, "America/Chicago"));
         import(&fresh, &old, Kind::Nets, "America/Chicago", None).unwrap();
         assert!(fresh.list_net_listings(false).unwrap().iter().all(|l| l.details.time_zone == "America/Chicago"));
+    }
+
+    #[test]
+    fn all_day_nets_go_as_they_are_and_older_00_00_to_23_59_become_all_day() {
+        // NETL-004, NETL-049, SHARE-016
+        let from = repo();
+        let mut always = net("SitRepNet", None);
+        (always.schedule_kind, always.weeks, always.weekdays, always.all_day) =
+            ("weekly".into(), vec![], vec![0, 1, 2, 3, 4, 5, 6], true);
+        from.create_net_listing(&net_listings::clean(always).unwrap()).unwrap();
+        let file = temp("nets.db");
+        export(&from, &file, Kind::Nets).unwrap();
+        let to = repo();
+        import(&to, &file, Kind::Nets, "UTC", None).unwrap();
+        assert!(to.list_net_listings(false).unwrap()[0].details.all_day);
+
+        // A format 2 list has no all-day; 00:00–23:59 stands for it.
+        let c = Connection::open(&file).unwrap();
+        c.execute_batch("UPDATE nets SET start_time = '00:00', end_time = '23:59'; ALTER TABLE nets DROP COLUMN all_day; UPDATE shared_list SET format = 2;").unwrap();
+        drop(c);
+        let older = repo();
+        import(&older, &file, Kind::Nets, "UTC", None).unwrap();
+        let got = &older.list_net_listings(false).unwrap()[0].details;
+        assert!(got.all_day && got.start_time.is_empty());
     }
 
     #[test]

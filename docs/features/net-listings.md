@@ -268,9 +268,9 @@ written in, and the app works out when each meeting falls here.
   fill in or a column-matching step, decided when it's built.
 - Printing or exporting the list.
 - Sessions (`NETL-002`, `NETL-008`, `NETL-009`), with the seasons they
-  bring (`NETL-046`), and all-day sessions (`NETL-004`, `NETL-028`,
-  `NETL-049`). Until they're built, a listing has one frequency and one
-  schedule.
+  bring (`NETL-046`). Until they're built, a listing has one frequency and
+  one schedule, and all day (`NETL-004`, `NETL-028`, `NETL-049`) belongs to
+  the listing.
 
 ## Acceptance examples
 

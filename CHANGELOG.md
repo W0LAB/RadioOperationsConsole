@@ -18,8 +18,13 @@ top. Each release's section here is also its description on the
 - Nets you already have keep your computer's time zone, so none of them
   moves. If one was entered in Zulu, edit it and choose **Zulu (UTC)**
   beside its times; its times stay as written.
-- Exported net lists carry each net's time zone. A list exported by an
-  older version is read in your time zone, and the import says so.
+- A net on the air around the clock can be marked **All day** instead of
+  given times. It's listed as "All day" at the top of its day (or of
+  Daily), never dimmed or marked as on now, and left out of Coming up.
+  Nets kept as 00:00–23:59 become all day when you upgrade or import them.
+- Exported net lists carry each net's time zone and whether it's all day.
+  A list exported by an older version is read in your time zone, and the
+  import says so.
 
 ## [2.10.2] - 2026-11-13
 

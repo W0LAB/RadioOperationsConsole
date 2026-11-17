@@ -40,6 +40,7 @@ function listing(overrides: Partial<NetListing>): NetListing {
     schedule_kind: "weekly",
     weekdays: [2],
     weeks: [],
+    all_day: false,
     start_time: "19:00",
     end_time: "19:30",
     checkin_info: "",
@@ -323,5 +324,51 @@ describe("NetsTab", () => {
       );
     });
 
+  });
+
+  describe("all day (NETL-004, NETL-028)", () => {
+    const ALWAYS = listing({ id: "always", name: "SitRepNet", repeater_id: null, frequency: "7.078 JS8", time_zone: "UTC", all_day: true, weekdays: [0, 1, 2, 3, 4, 5, 6], start_time: "", end_time: "" });
+
+    beforeEach(() => {
+      vi.mocked(api.listNetListings).mockImplementation((retired = false) =>
+        Promise.resolve(retired ? [] : [...LISTINGS, ALWAYS])
+      );
+    });
+
+    it("shows All day first under Daily, unmarked, left out of Coming up, starting at the time now", async () => {
+      const user = userEvent.setup();
+      const onStart = vi.fn();
+      renderTab(onStart);
+      await screen.findAllByText("Morning Net");
+      const rows = within(day("Daily")).getAllByText(/Net$|SitRepNet/);
+      expect(rows[0]).toHaveTextContent("SitRepNet");
+      const row = rowIn(day("Daily"), "SitRepNet");
+      expect(within(row).getByText("All day")).toBeInTheDocument();
+      expect(row).not.toHaveClass("net-row-underway");
+      expect(row).not.toHaveClass("net-row-over");
+      expect(screen.queryByRole("region", { name: "Coming up" })).not.toBeInTheDocument();
+
+      await user.click(within(row).getByRole("button", { name: "Start activity for SitRepNet" }));
+      expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-10-02", time: "09:00" }));
+    });
+
+    it("hides the times when All day is ticked, and saves none", async () => {
+      const user = userEvent.setup();
+      renderTab();
+      await screen.findAllByText("Morning Net");
+      await user.click(screen.getByRole("button", { name: "+ Add net" }));
+      await user.type(screen.getByLabelText("Net name"), "Watch Net");
+      await user.click(screen.getByRole("button", { name: "Sun" }));
+      await user.type(screen.getByLabelText("Start time"), "07:00");
+      await user.click(screen.getByRole("checkbox", { name: "All day" }));
+      expect(screen.queryByLabelText("Start time")).not.toBeInTheDocument();
+      expect(screen.getByText("Sundays all day")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Save net" }));
+      expect(api.saveNetListing).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({ all_day: true, start_time: "", end_time: "", weekdays: [0] }),
+        "op1"
+      );
+    });
   });
 });

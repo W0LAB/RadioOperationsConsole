@@ -4,6 +4,7 @@ import type { NetListing, NetListingDetails, Operator, Repeater } from "../../ty
 import { haversineKm } from "../../geo";
 import { formatRepeater, tuningDetails } from "../../repeaters";
 import {
+  allDayHere,
   comingUp,
   dailyDays,
   describeMeeting,
@@ -194,8 +195,15 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
       title: l.name,
       activityType: l.activity_type,
       // The day and time here of the meeting it was started from; today when as needed (NETL-030).
-      date: isoDate(meeting?.start ?? now),
-      time: meeting ? `${pad2(meeting.start.getHours())}:${pad2(meeting.start.getMinutes())}` : l.start_time,
+      // All day: now when on today, else no time.
+      date: isoDate(l.all_day && meeting?.underway ? now : (meeting?.start ?? now)),
+      time: l.all_day
+        ? meeting?.underway
+          ? `${pad2(now.getHours())}:${pad2(now.getMinutes())}`
+          : ""
+        : meeting
+          ? `${pad2(meeting.start.getHours())}:${pad2(meeting.start.getMinutes())}`
+          : l.start_time,
       frequency: r ? formatRepeater(r) : l.frequency,
       repeater:
         r && r.location_lat != null && r.location_lon != null
@@ -244,7 +252,8 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     const facts: [string, string][] = [
       ["Meets", describeSchedule(l, now)],
       // Here and in UTC, so both are at hand (NETL-045).
-      ["Next", next ? describeMeeting(next) : ""],
+      // All day: when its day runs here, if that differs (NETL-028).
+      ["Next", l.all_day ? allDayHere(l, next) : next ? describeMeeting(next) : ""],
       ["Tune", r ? tuningDetails(r) : l.frequency],
       ["Repeater", r ? `${r.name}${km != null ? ` · ${shortMiles(km)} away` : ""}` : ""],
       ["Run by", l.run_by],
@@ -324,7 +333,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
 
   /** Under way now, at today's meeting. */
   const isToday = (e: WeekEntry) =>
-    e.meeting != null && e.meeting.underway && isoDate(e.meeting.start) === isoDate(now);
+    !e.listing.all_day && e.meeting != null && e.meeting.underway && isoDate(e.meeting.start) === isoDate(now);
 
   /** The bands a section's nets need, once each, in the order first met: "2m, 70cm". */
   function bandsOf(nets: NetListing[]): string {

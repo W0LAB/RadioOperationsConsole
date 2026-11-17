@@ -66,7 +66,9 @@ export function meetsOn(l: NetListingDetails, day: Date): boolean {
   return meetsOnCivil(l, civil(day.getFullYear(), day.getMonth(), day.getDate()));
 }
 
-const hasTime = (l: NetListingDetails) => l.schedule_kind !== "as_needed" && /^\d\d:\d\d$/.test(l.start_time);
+/** Weekly or monthly, all day or at a time. */
+const hasTime = (l: NetListingDetails) =>
+  l.schedule_kind !== "as_needed" && (l.all_day || /^\d\d:\d\d$/.test(l.start_time));
 
 /** The meeting on calendar date `c` in the listing's zone, at its times there (NETL-042, NETL-044). */
 function meetingOnCivil(l: NetListingDetails, c: Date, now: Date): Meeting {
@@ -75,6 +77,13 @@ function meetingOnCivil(l: NetListingDetails, c: Date, now: Date): Meeting {
     const [h, m] = hhmm.split(":").map(Number);
     return zonedInstant(c.getUTCFullYear(), c.getUTCMonth() + 1, c.getUTCDate(), h, m, zone);
   };
+  if (l.all_day) {
+    // From the start of its day to the start of the next, in its zone (NETL-004).
+    const start = at("00:00");
+    const next = civil(c.getUTCFullYear(), c.getUTCMonth(), c.getUTCDate() + 1);
+    const end = zonedInstant(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), 0, 0, zone);
+    return { start, end, underway: start <= now && now < end };
+  }
   const start = at(l.start_time);
   const end = l.end_time ? at(l.end_time) : new Date(start.getTime() + ASSUMED_MINUTES * 60_000);
   return { start, end, underway: start <= now && now < end };
@@ -197,12 +206,18 @@ export function isDaily(l: NetListingDetails): boolean {
  */
 export function weekView(listings: NetListing[], now: Date): WeekView {
   const scheduled = listings.filter(hasTime);
-  // By the time here (NETL-043); a net with no meeting in reach by its written time.
-  const timeOf = (e: WeekEntry) => (e.meeting ? hhmm(e.meeting.start) : e.listing.start_time);
+  // By the time here (NETL-043); a net with no meeting in reach by its written time. All-day nets first (NETL-028).
+  const timeOf = (e: WeekEntry) =>
+    e.listing.all_day ? "" : e.meeting ? hhmm(e.meeting.start) : e.listing.start_time;
   const byTime = (a: WeekEntry, b: WeekEntry) => timeOf(a).localeCompare(timeOf(b)) || byName(a.listing, b.listing);
   const daily = scheduled
     .filter(isDaily)
-    .map((listing) => ({ listing, meeting: nextMeeting(listing, now), overToday: overToday(listing, now) }))
+    .map((listing) => ({
+      listing,
+      meeting: nextMeeting(listing, now),
+      // An all-day net is never over, nor marked (NETL-028).
+      overToday: !listing.all_day && overToday(listing, now),
+    }))
     .sort(byTime);
   const byWeekday: WeekEntry[][] = DAY_NAMES.map(() => []);
   for (const listing of scheduled.filter((l) => !isDaily(l))) {
@@ -214,7 +229,11 @@ export function weekView(listings: NetListing[], now: Date): WeekView {
       byWeekday[place.weekday].push({
         listing,
         meeting: place.next,
-        overToday: isToday && place.first!.end <= now && !(place.next && isoDate(place.next.start) === isoDate(now)),
+        overToday:
+          !listing.all_day &&
+          isToday &&
+          place.first!.end <= now &&
+          !(place.next && isoDate(place.next.start) === isoDate(now)),
       });
     }
   }
@@ -253,6 +272,8 @@ function hhmm(d: Date): string {
 export function comingUp(listings: NetListing[], now: Date, hours = 12): DayEntry[] {
   const until = now.getTime() + hours * 60 * 60_000;
   return listings
+    // Always on, so never coming up (NETL-025, NETL-028).
+    .filter((l) => !l.all_day)
     .flatMap((listing) => {
       const meeting = nextMeeting(listing, now);
       return meeting && meeting.start.getTime() < until ? [{ listing, meeting }] : [];
@@ -312,10 +333,14 @@ export function describeSchedule(l: NetListingDetails, now: Date = new Date()): 
             ? DAY_NAMES[l.weekdays[0]]
             : l.weekdays.map((d) => DAY_SHORT[d]).join(", ")
         }`;
-  const time = l.end_time ? `${l.start_time}–${l.end_time}` : l.start_time;
   const zone = zoneOf(l);
   const label = zoneLabel(zone, now);
   const suffix = isOtherZone(l) ? ` ${label === "Z" ? "UTC" : label}` : "";
+  if (l.all_day) {
+    // "Wednesdays all day UTC"; every day, the zone doesn't matter.
+    return l.schedule_kind === "weekly" && l.weekdays.length === 7 ? "Every day, all day" : `${days} all day${suffix}`;
+  }
+  const time = l.end_time ? `${l.start_time}–${l.end_time}` : l.start_time;
   const text = `${days} ${time}${suffix}`;
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -331,6 +356,7 @@ export function isoDate(d: Date): string {
  * 01:00Z". With no meeting in reach, its written times.
  */
 export function meetingTimes(l: NetListingDetails, m: Meeting | null): string {
+  if (l.all_day) return "All day"; // NETL-028
   if (!m) {
     const written = l.end_time ? `${l.start_time}–${l.end_time}` : l.start_time;
     if (!isOtherZone(l)) return written;
@@ -350,4 +376,15 @@ export function describeMeeting(m: Meeting): string {
   if (localZone() === "UTC") return here;
   const utc = wallTime(m.start, "UTC");
   return `${here} · ${DAY_SHORT[utc.weekday]} ${timeIn(m.start, "UTC")}`;
+}
+
+/**
+ * When an all-day net's day runs here, when its zone isn't this computer's
+ * and it doesn't meet every day: "Tue 20:00 – Wed 20:00 here" (NETL-028).
+ * Otherwise "".
+ */
+export function allDayHere(l: NetListingDetails, m: Meeting | null): string {
+  if (!l.all_day || !m || !isOtherZone(l) || (l.schedule_kind === "weekly" && l.weekdays.length === 7)) return "";
+  const at = (d: Date) => `${DAY_SHORT[d.getDay()]} ${hhmm(d)}`;
+  return `${at(m.start)} – ${at(m.end)} here`;
 }

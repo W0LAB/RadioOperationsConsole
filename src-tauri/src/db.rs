@@ -152,6 +152,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0037_net_listing_time_zone.sql",
         include_str!("../migrations/0037_net_listing_time_zone.sql"),
     ),
+    (
+        "0038_net_listing_all_day.sql",
+        include_str!("../migrations/0038_net_listing_all_day.sql"),
+    ),
 ];
 
 /// Whether this build knows the migration, i.e. a database that has it wasn't

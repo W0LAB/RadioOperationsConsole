@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  allDayHere,
   comingUp,
   dailyDays,
   describeMeeting,
@@ -23,6 +24,7 @@ function listing(overrides: Partial<NetListing> = {}): NetListing {
     schedule_kind: "weekly",
     weekdays: [2],
     weeks: [],
+    all_day: false,
     start_time: "19:00",
     end_time: "19:30",
     checkin_info: "",
@@ -255,5 +257,39 @@ describe("time zones (NETL-040–045)", () => {
   it("is still listed on a daylight-saving day (NETL-044)", () => {
     const early = listing({ weekdays: [0], start_time: "02:30", end_time: "" });
     expect(nextMeeting(early, new Date(2027, 2, 13, 12))!.start).toEqual(new Date("2027-03-14T07:30:00Z"));
+  });
+});
+
+describe("all day (NETL-004, NETL-028)", () => {
+  const sitrep = listing({ id: "sitrep", name: "SitRepNet", time_zone: "UTC", all_day: true, weekdays: [0, 1, 2, 3, 4, 5, 6], start_time: "", end_time: "" });
+  const wed = listing({ id: "wed", name: "Wednesday All Day", time_zone: "UTC", all_day: true, weekdays: [3], start_time: "", end_time: "" });
+  const monday = new Date(2026, 10, 16, 23, 28);
+
+  it("lists an all-day net first under its heading, never over, never coming up", () => {
+    const early = listing({ id: "early", weekdays: [0, 1, 2, 3, 4, 5, 6], start_time: "00:30", end_time: "01:00" });
+    const week = weekView([early, sitrep], monday);
+    expect(week.daily.map((e) => e.listing.id)).toEqual(["sitrep", "early"]);
+    expect(week.daily[0].overToday).toBe(false);
+    expect(week.daily[1].overToday).toBe(true);
+    expect(meetingTimes(sitrep, week.daily[0].meeting)).toBe("All day");
+    expect(comingUp([sitrep, early], monday).map((e) => e.listing.id)).toEqual(["early"]);
+  });
+
+  it("runs from the start of its day to the start of the next, in its zone", () => {
+    // Wednesday UTC is Tuesday 19:00 to Wednesday 19:00 here in November.
+    const m = nextMeeting(wed, monday)!;
+    expect(m.start).toEqual(new Date(2026, 10, 17, 19, 0));
+    expect(m.end).toEqual(new Date(2026, 10, 18, 19, 0));
+    expect(weekView([wed], monday).days[2].entries.map((e) => e.listing.id)).toEqual(["wed"]);
+    expect(describeSchedule(wed)).toBe("Wednesdays all day UTC");
+    expect(allDayHere(wed, m)).toBe("Tue 19:00 – Wed 19:00 here");
+  });
+
+  it("needs no zone or times when every day", () => {
+    expect(describeSchedule(sitrep)).toBe("Every day, all day");
+    expect(allDayHere(sitrep, nextMeeting(sitrep, monday))).toBe("");
+    const local = listing({ all_day: true, weekdays: [3], start_time: "", end_time: "" });
+    expect(describeSchedule(local)).toBe("Wednesdays all day");
+    expect(allDayHere(local, nextMeeting(local, monday))).toBe("");
   });
 });

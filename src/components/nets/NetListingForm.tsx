@@ -14,6 +14,7 @@ export const EMPTY_LISTING: NetListingDetails = {
   schedule_kind: "weekly",
   weekdays: [],
   weeks: [],
+  all_day: false,
   start_time: "",
   end_time: "",
   run_by: "",
@@ -32,6 +33,7 @@ export function listingProblem(d: NetListingDetails): string | null {
   if (d.weekdays.length === 0) return "Choose the day or days the net meets.";
   if (d.schedule_kind === "monthly" && d.weeks.length === 0)
     return "Choose which weeks of the month it meets.";
+  if (d.all_day) return null;
   if (!TIME.test(d.start_time.trim())) return "Enter the start time as HH:MM, for example 19:00.";
   if (d.end_time.trim()) {
     if (!TIME.test(d.end_time.trim())) return "Enter the end time as HH:MM, or leave it blank.";
@@ -72,7 +74,9 @@ export default function NetListingForm({
       return;
     }
     try {
-      await onSave({ ...d, start_time: d.start_time.trim(), end_time: d.end_time.trim() });
+      // An all-day net has no times (NETL-004).
+      const times = d.all_day ? { start_time: "", end_time: "" } : { start_time: d.start_time.trim(), end_time: d.end_time.trim() };
+      await onSave({ ...d, ...times });
     } catch (e) {
       setError(String(e));
     }
@@ -175,28 +179,36 @@ export default function NetListingForm({
             ))}
           </div>
           <div className="inline-form">
-            <label>
-              Start
-              <input
-                aria-label="Start time"
-                className="repeater-mhz"
-                placeholder="19:00"
-                value={d.start_time}
-                onChange={(e) => set({ start_time: e.target.value })}
-                onKeyDown={enter}
-              />
+            <label className="checkbox-row" title="On the air around the clock, the whole of each day it meets">
+              <input type="checkbox" checked={d.all_day} onChange={(e) => set({ all_day: e.target.checked })} />
+              All day
             </label>
-            <label>
-              End (optional)
-              <input
-                aria-label="End time"
-                className="repeater-mhz"
-                placeholder="19:30"
-                value={d.end_time}
-                onChange={(e) => set({ end_time: e.target.value })}
-                onKeyDown={enter}
-              />
-            </label>
+            {!d.all_day && (
+              <>
+                <label>
+                  Start
+                  <input
+                    aria-label="Start time"
+                    className="repeater-mhz"
+                    placeholder="19:00"
+                    value={d.start_time}
+                    onChange={(e) => set({ start_time: e.target.value })}
+                    onKeyDown={enter}
+                  />
+                </label>
+                <label>
+                  End (optional)
+                  <input
+                    aria-label="End time"
+                    className="repeater-mhz"
+                    placeholder="19:30"
+                    value={d.end_time}
+                    onChange={(e) => set({ end_time: e.target.value })}
+                    onKeyDown={enter}
+                  />
+                </label>
+              </>
+            )}
             <span className="settings-hint">{zoneHint(d.time_zone)}</span>
           </div>
           <TimeZoneChoice value={d.time_zone} onChange={(time_zone) => set({ time_zone })} />

@@ -33,7 +33,10 @@ pub struct NetListingDetails {
     pub weekdays: Vec<u8>,
     /// Monthly only: "1"–"4" or "last".
     pub weeks: Vec<String>,
-    /// "HH:MM" in `time_zone`; empty for "as needed".
+    /// On the air the whole day it meets, in `time_zone`, with no times (NETL-004).
+    #[serde(default)]
+    pub all_day: bool,
+    /// "HH:MM" in `time_zone`; empty for "as needed" or all day.
     pub start_time: String,
     /// Optional; empty when not given.
     pub end_time: String,
@@ -117,6 +120,7 @@ pub fn clean(mut d: NetListingDetails) -> Result<NetListingDetails, String> {
             d.weeks.clear();
             d.start_time.clear();
             d.end_time.clear();
+            d.all_day = false;
             return Ok(d);
         }
         "weekly" => d.weeks.clear(),
@@ -140,6 +144,15 @@ pub fn clean(mut d: NetListingDetails) -> Result<NetListingDetails, String> {
     }
     d.weekdays.sort_unstable();
     d.weekdays.dedup();
+    // 00:00–23:59 is the whole day (NETL-049).
+    if d.start_time == "00:00" && d.end_time == "23:59" {
+        d.all_day = true;
+    }
+    if d.all_day {
+        d.start_time.clear();
+        d.end_time.clear();
+        return Ok(d);
+    }
     let Some(start) = minutes(&d.start_time) else {
         return Err("Enter the start time as HH:MM, for example 19:00.".into());
     };
@@ -162,7 +175,7 @@ fn blank(s: &str) -> Option<&str> {
     if s.is_empty() { None } else { Some(s) }
 }
 
-const COLS: &str = "id, name, activity_type, repeater_id, coalesce(frequency,''), schedule_kind, coalesce(weekdays,''), coalesce(weeks,''), coalesce(start_time,''), coalesce(end_time,''), coalesce(run_by,''), coalesce(notes,''), coalesce(retired_at,''), coalesce(checkin_info,''), coalesce(time_zone,'')";
+const COLS: &str = "id, name, activity_type, repeater_id, coalesce(frequency,''), schedule_kind, coalesce(weekdays,''), coalesce(weeks,''), coalesce(start_time,''), coalesce(end_time,''), coalesce(run_by,''), coalesce(notes,''), coalesce(retired_at,''), coalesce(checkin_info,''), coalesce(time_zone,''), all_day";
 
 fn map(r: &rusqlite::Row) -> rusqlite::Result<NetListing> {
     let weekdays: String = r.get(6)?;
@@ -183,6 +196,7 @@ fn map(r: &rusqlite::Row) -> rusqlite::Result<NetListing> {
             checkin_info: r.get(13)?,
             notes: r.get(11)?,
             time_zone: r.get(14)?,
+            all_day: r.get(15)?,
         },
         retired_at: r.get(12)?,
     })
@@ -218,8 +232,8 @@ impl Repository {
     pub fn create_net_listing(&self, d: &NetListingDetails) -> rusqlite::Result<String> {
         let id = Uuid::new_v4().to_string();
         self.conn.execute(
-            "INSERT INTO net_listings(id, name, activity_type, repeater_id, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, notes, created_at, checkin_info, time_zone) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
-            params![id, d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), Utc::now().to_rfc3339(), blank(&d.checkin_info), d.time_zone],
+            "INSERT INTO net_listings(id, name, activity_type, repeater_id, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, notes, created_at, checkin_info, time_zone, all_day) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
+            params![id, d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), Utc::now().to_rfc3339(), blank(&d.checkin_info), d.time_zone, d.all_day],
         )?;
         Ok(id)
     }
@@ -228,8 +242,8 @@ impl Repository {
     /// started from it keep their own copies (NETL-011).
     pub fn update_net_listing(&self, id: &str, d: &NetListingDetails) -> rusqlite::Result<()> {
         let n = self.conn.execute(
-            "UPDATE net_listings SET name = ?1, activity_type = ?2, repeater_id = ?3, frequency = ?4, schedule_kind = ?5, weekdays = ?6, weeks = ?7, start_time = ?8, end_time = ?9, run_by = ?10, notes = ?11, checkin_info = ?12, time_zone = ?13 WHERE id = ?14",
-            params![d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), blank(&d.checkin_info), d.time_zone, id],
+            "UPDATE net_listings SET name = ?1, activity_type = ?2, repeater_id = ?3, frequency = ?4, schedule_kind = ?5, weekdays = ?6, weeks = ?7, start_time = ?8, end_time = ?9, run_by = ?10, notes = ?11, checkin_info = ?12, time_zone = ?13, all_day = ?14 WHERE id = ?15",
+            params![d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), blank(&d.checkin_info), d.time_zone, d.all_day, id],
         )?;
         if n == 0 {
             return Err(rusqlite::Error::QueryReturnedNoRows);
@@ -356,6 +370,44 @@ mod tests {
         assert_eq!(r.delete_net_listing(&id).unwrap().schedule_kind, "monthly");
         assert!(r.get_net_listing(&id).is_err());
         assert!(r.delete_net_listing(&id).is_err());
+    }
+
+    #[test]
+    fn all_day_nets_have_no_times() {
+        // NETL-004, NETL-049
+        let mut d = tuesday_net();
+        d.all_day = true;
+        let d = clean(d).unwrap();
+        assert!(d.all_day && d.start_time.is_empty() && d.end_time.is_empty());
+        assert!(!d.weekdays.is_empty(), "still needs its days");
+
+        let mut whole = tuesday_net();
+        (whole.start_time, whole.end_time) = ("00:00".into(), "23:59".into());
+        assert!(clean(whole).unwrap().all_day, "00:00–23:59 is all day");
+
+        let mut asn = tuesday_net();
+        asn.all_day = true;
+        asn.schedule_kind = "as_needed".into();
+        assert!(!clean(asn).unwrap().all_day);
+
+        let r = repo();
+        let id = r.create_net_listing(&d).unwrap();
+        assert_eq!(r.get_net_listing(&id).unwrap().details, d);
+    }
+
+    #[test]
+    fn upgrading_makes_00_00_to_23_59_all_day() {
+        // NETL-049: as 0038 finds them, written before all-day existed.
+        let r = repo();
+        let id = r.create_net_listing(&clean(tuesday_net()).unwrap()).unwrap();
+        let other = r.create_net_listing(&clean(tuesday_net()).unwrap()).unwrap();
+        r.conn
+            .execute("UPDATE net_listings SET start_time = '00:00', end_time = '23:59', all_day = 0 WHERE id = ?1", params![id])
+            .unwrap();
+        r.conn.execute_batch(include_str!("../migrations/0038_net_listing_all_day.sql").split_once(';').unwrap().1).unwrap();
+        let got = r.get_net_listing(&id).unwrap().details;
+        assert!(got.all_day && got.start_time.is_empty() && got.end_time.is_empty());
+        assert!(!r.get_net_listing(&other).unwrap().details.all_day);
     }
 
     #[test]
