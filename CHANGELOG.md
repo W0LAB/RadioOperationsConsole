@@ -6,6 +6,22 @@ top. Each release's section here is also its description on the
 
 ## [Unreleased]
 
+## [2.11.1] - 2026-11-17
+
+**What works differently:**
+- In **Nets**, every meeting time now shows your time and then Zulu
+  ("20:00 · 01:00Z"), whatever zone the net is written in. A net on now
+  gives its end both ways ("On now · until 18:59 · 23:59Z").
+- When adding or editing a net, a **Next** line under the times shows the
+  next meeting here and in Zulu once the times are filled in, so a net
+  entered as it's published can be checked before saving.
+- A net can run overnight: an end time earlier than the start is the next
+  day, so 22:00–01:00 is one session, shown as on now until it ends.
+
+**Fixed:**
+- In Coming up, a long time no longer runs into the net's name, and the
+  times in the week and Coming up stay on one line.
+
 ## [2.11.0] - 2026-11-17
 
 **What works differently:**
@@ -844,7 +860,8 @@ This version updates the database: once it's run, 2.6.0 can't open the data.
 
 The first release.
 
-[Unreleased]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.11.0...HEAD
+[Unreleased]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.11.1...HEAD
+[2.11.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.2...v2.11.0
 [2.10.2]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.0...v2.10.1
