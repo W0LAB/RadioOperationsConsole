@@ -63,9 +63,11 @@ written in, and the app works out when each meeting falls here.
     Thursday", "last Sunday").
   - **As needed**: no fixed time (an ARES activation net, a SKYWARN net).
 - **NETL-004:** A weekly or monthly session MUST have a start time and MAY
-  have an end time. These are clock times in the listing's time zone
-  (`NETL-040`), and the weekdays and weeks of the month are counted in that
-  zone too.
+  have an end time, unless it is marked **All day** (a check box beside
+  the times), for a net on the air around the clock. These are clock times
+  in the listing's time zone (`NETL-040`), and the weekdays and weeks of the
+  month are counted in that zone too. An all-day session runs from the
+  start of its day to the start of the next, in that zone.
 - **NETL-005:** A listing MAY hold who runs it (net manager or sponsoring
   group, as free text) and notes. Anything the schedule can't express
   ("not on holidays", "5th Thursday is a social net") goes in the notes.
@@ -106,8 +108,12 @@ written in, and the app works out when each meeting falls here.
 - **NETL-040:** A listing MUST have a time zone: the zone its sessions' days
   and times are written in. It is UTC (shown as "UTC (Zulu)"), this
   computer's zone, or any other named zone (an IANA name such as
-  `America/Chicago`, offered by place name). A new listing MUST start in this
-  computer's zone, with UTC one choice away. The zone MUST be stored by
+  `America/Chicago`, offered by place name). The form MUST offer it as one
+  choice beside the times: **Local** (naming this computer's zone),
+  **Zulu (UTC)**, or **Other…**. A new listing MUST start on Local, so a
+  net published in local time is entered exactly as published, and one
+  published in Zulu is entered in Zulu just as directly. Neither is
+  converted by hand. The zone MUST be stored by
   name, never as "this computer's", so a listing keeps its meaning after the
   computer's zone changes and on another computer (`SHARE-005`).
 - **NETL-041:** Changing a listing's time zone MUST keep the days and times
@@ -145,6 +151,9 @@ written in, and the app works out when each meeting falls here.
   Nothing in such a listing says what zone its times were written in, so
   none is guessed. One that was written in another zone, such as Zulu, is
   corrected in its form (`NETL-041`).
+- **NETL-049:** When the app is upgraded, a session running 00:00–23:59
+  every day it meets MUST become all day (`NETL-004`). An import of an older
+  list does the same (`SHARE-016`).
 
 ## Seeing what's on
 
@@ -175,6 +184,12 @@ written in, and the app works out when each meeting falls here.
   opens again each day. While searching or filtered, every heading with a
   match MUST be open. A heading's net count is of its lines ("Daily · 12
   nets").
+- **NETL-028:** An all-day session MUST be shown as "All day" in place of
+  a time, at the top of its heading (Daily, or its weekday), and never
+  dimmed or marked as under way, since it always is. Its details MUST say
+  when its day runs here when the listing's zone isn't this computer's
+  and it doesn't meet every day ("Wednesdays all day UTC · Tue 20:00 –
+  Wed 20:00 here").
 - **NETL-021:** Each meeting MUST take one line: its time (`NETL-045`), its
   name, and its session's repeater with the repeater's one-line frequency
   ("W4ABC Orlando 146.940 -0.600 PL 100.0"), or the session's own frequency
@@ -193,7 +208,8 @@ written in, and the app works out when each meeting falls here.
   first, with times as in `NETL-045`: "On now · until 08:00" in green for
   one under way, else "in 25 min" or "in 2 h 10 min" — each with ▶. A
   net starting within the hour MUST show its time in amber (still to do).
-  With no such nets the box is left out.
+  With no such nets the box is left out. All-day sessions MUST NOT be
+  listed there (`NETL-028`).
 - **NETL-026:** Each line MUST show, at a glance, which radio it needs and
   what kind of net it is: a band chip before the repeater, worked out from
   the frequency ("2m", "70cm", "10m", "GMRS", "MURS", "CB"), colored by group
@@ -223,7 +239,8 @@ written in, and the app works out when each meeting falls here.
   frequency (the repeater's one-line form, or its frequency text), its
   repeater, and its start time in local time (`NETL-042`). The date is the
   local date of the meeting started from in the list, or today for "as
-  needed".
+  needed". For an all-day session the start time is the current time when
+  started for today, and left empty otherwise.
 - **NETL-031:** Starting from a listing MUST NOT create anything by itself;
   the operator confirms with Create and MAY change any value first.
 - **NETL-032:** The activity MUST NOT keep a link back to the listing; it
@@ -250,9 +267,10 @@ written in, and the app works out when each meeting falls here.
   spreadsheets won't share one layout; it needs either a fixed template to
   fill in or a column-matching step, decided when it's built.
 - Printing or exporting the list.
-- Sessions (`NETL-002`, `NETL-008`, `NETL-009`) and time zones
-  (`NETL-040`–`048`). Until they're built, a listing has one frequency and
-  one schedule, and its times are read in this computer's zone.
+- Sessions (`NETL-002`, `NETL-008`, `NETL-009`), all-day sessions
+  (`NETL-004`, `NETL-028`, `NETL-049`) and time zones (`NETL-040`–`048`).
+  Until they're built, a listing has one frequency and one schedule, and
+  its times are read in this computer's zone.
 
 ## Acceptance examples
 
@@ -339,3 +357,16 @@ written in, and the app works out when each meeting falls here.
   When it is imported on a computer in `America/Chicago` in November
   Then the first is listed under Tuesday as "19:00 · 01:00Z"
   And the second under Tuesday as "18:00 · 19:00 EST".
+
+- Given "SitRepNet" in UTC, every day, all day, on 7.078
+  Then it is listed under Daily as "All day", above the timed nets
+  And it is never dimmed, marked as on now, or listed in Coming up.
+
+- Given a listing from before this change, every day 00:00–23:59
+  When the app is upgraded
+  Then its session is all day.
+
+- Given a new listing for a net published as "Wednesdays 01:00Z"
+  When the operator chooses Zulu (UTC) and types Wednesday 01:00
+  Then on a computer in `America/New_York` it is listed under Tuesday as
+  "20:00 · 01:00Z" in November.

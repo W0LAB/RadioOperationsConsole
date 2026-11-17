@@ -58,7 +58,8 @@ but for one list at a time, and an import only ever adds.
   MUST be recorded in the history, like one added by hand.
 - **SHARE-016:** A net list made before time zones and sessions existed
   MUST still import. Each net becomes a listing with one session, in the
-  importing computer's zone (as `NETL-047` does on upgrade). The
+  importing computer's zone, and a session running 00:00–23:59 becomes all
+  day (as `NETL-047` and `NETL-049` do on upgrade). The
   confirmation MUST say so ("Times in this list are read as
   America/Chicago.") so the operator can correct them afterward
   (`NETL-041`).
