@@ -67,7 +67,10 @@ written in, and the app works out when each meeting falls here.
   the times), for a net on the air around the clock. These are clock times
   in the listing's time zone (`NETL-040`), and the weekdays and weeks of the
   month are counted in that zone too. An all-day session runs from the
-  start of its day to the start of the next, in that zone.
+  start of its day to the start of the next, in that zone. An end time
+  earlier than the start is on the next day, so a session MAY run
+  overnight ("22:00–01:00"); it meets on the day it starts. The end MUST NOT
+  equal the start.
 - **NETL-005:** A listing MAY hold who runs it (net manager or sponsoring
   group, as free text) and notes. Anything the schedule can't express
   ("not on holidays", "5th Thursday is a social net") goes in the notes.
@@ -141,12 +144,16 @@ written in, and the app works out when each meeting falls here.
   twice (repeated when daylight-saving time ends), the meeting MUST be the
   first of the two. In both cases the net MUST still be listed that day.
 - **NETL-045:** Wherever a meeting's time is shown (the week, Coming up,
-  Start activity), it MUST be in local time. When the listing's zone isn't
-  this computer's, the time in the listing's own zone MUST follow, with the
-  zone shown: "20:00 · 01:00Z", "18:00 · 19:00 EST". In the details, each
+  Start activity), it MUST be in local time followed by Zulu, whatever zone
+  the listing is written in: "20:00 · 01:00Z" (for one on now, its end:
+  "On now · until 18:59 · 23:59Z"). On a computer that keeps UTC the local
+  time is Zulu and stands alone. In the details, each
   session's schedule MUST be in the listing's own zone ("Wednesdays
   01:00–02:00 UTC"), followed by its next meeting in local time and in UTC
   ("Next: Tue Nov 17, 20:00 EST · Wed 01:00Z"), so both are always at hand.
+  The form MUST show that same next meeting under each session's times
+  once they are complete, so a net entered as published can be checked
+  against the conversion before it is saved.
 - **NETL-046:** Summer (`NETL-008`) is the period when the listing's zone
   keeps daylight-saving time. For a listing in UTC, or in another zone that
   doesn't keep daylight-saving time, summer follows this computer's zone

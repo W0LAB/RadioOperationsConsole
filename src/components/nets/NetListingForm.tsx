@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { NetListingDetails, NetSession, Repeater, ScheduleKind, Season } from "../../types";
 import { formatRepeater } from "../../repeaters";
-import { describeSchedule, WEEK_OPTIONS, WEEKDAY_OPTIONS } from "../../netSchedule";
+import { describeMeeting, describeSchedule, nextMeeting, WEEK_OPTIONS, WEEKDAY_OPTIONS } from "../../netSchedule";
 import ActivityTypeSelect from "../operations/ActivityTypeSelect";
 import TimeZoneChoice, { zoneHint } from "./TimeZoneChoice";
 import { localZone } from "../../timeZones";
@@ -41,7 +41,8 @@ function sessionProblem(s: NetSession): string | null {
   if (!TIME.test(s.start_time.trim())) return "Enter the start time as HH:MM, for example 19:00.";
   if (s.end_time.trim()) {
     if (!TIME.test(s.end_time.trim())) return "Enter the end time as HH:MM, or leave it blank.";
-    if (s.end_time.trim() <= s.start_time.trim()) return "The end time should be after the start time.";
+    // An end before the start is the next day: 22:00–01:00 runs overnight (NETL-004).
+    if (s.end_time.trim() === s.start_time.trim()) return "The end time should differ from the start time.";
   }
   return null;
 }
@@ -119,6 +120,8 @@ function SessionFields({
   // "Start time" alone with one session; "Start time (2nd schedule)" with several.
   const label = (text: string) => (several ? `${text} (${scheduleName(index)})` : text);
   const scheduled = s.schedule_kind !== "as_needed";
+  // Once the times are complete, when that is here and in Zulu (NETL-045).
+  const next = scheduled && !s.all_day && !sessionProblem(s) ? nextMeeting({ ...s, time_zone: zone }, new Date()) : null;
   const fields = (
     <div className="net-form-grid">
       <span className="net-form-label">Frequency</span>
@@ -234,6 +237,15 @@ function SessionFields({
             {/* With one session the zone choice itself is here; with several it is above them all (NETL-041). */}
             {zoneChoice ?? (several && <span className="settings-hint">{zoneHint(zone)}</span>)}
           </div>
+          {next && (
+            <>
+              <span className="net-form-label">Next</span>
+              {/* The times as entered, converted: local, then Zulu (NETL-045). */}
+              <span className="settings-hint" aria-label={label("Next meeting")}>
+                {describeMeeting(next)}
+              </span>
+            </>
+          )}
         </>
       )}
 

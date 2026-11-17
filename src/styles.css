@@ -2594,15 +2594,21 @@ button.online-pill-working-offline:hover {
 .net-row,
 .net-coming-row {
   display: grid;
-  grid-template-columns: 9.5em minmax(12em, 1fr) minmax(0, 1.4fr) auto;
+  /* The time column fits "22:00–01:00 · 03:00Z" (20 monospace characters) on one line. */
+  grid-template-columns: 12.5em minmax(12em, 1fr) minmax(0, 1.4fr) auto;
   gap: 4px 14px;
   align-items: center;
   padding: 5px 6px;
   border-bottom: 1px solid var(--border);
 }
 
+.net-row-when {
+  white-space: nowrap;
+}
+
+/* Fits "On now · until 18:59 · 23:59Z" in bold on one line. */
 .net-coming-row {
-  grid-template-columns: 11em minmax(12em, 1fr) minmax(0, 1.4fr) auto;
+  grid-template-columns: 17em minmax(12em, 1fr) minmax(0, 1.4fr) auto;
 }
 
 /* A net meeting right now stands out (NETL-020). */
@@ -2741,6 +2747,7 @@ button.online-pill-working-offline:hover {
   border-bottom: none;
 }
 
+/* One line; the column is sized for the longest ("On now · until 18:59 · 23:59Z"). */
 .net-coming-when {
   color: var(--text-dim);
   white-space: nowrap;

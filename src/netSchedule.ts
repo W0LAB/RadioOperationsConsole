@@ -134,7 +134,13 @@ function meetingOnCivil(l: Schedule, c: Date, now: Date): Meeting {
     return { start, end, underway: start <= now && now < end };
   }
   const start = at(l.start_time);
-  const end = l.end_time ? at(l.end_time) : new Date(start.getTime() + ASSUMED_MINUTES * 60_000);
+  let end = new Date(start.getTime() + ASSUMED_MINUTES * 60_000);
+  if (l.end_time) {
+    // An end before the start is on the next day, in its zone: 22:00–01:00 runs overnight (NETL-004).
+    const c2 = l.end_time < l.start_time ? civil(c.getUTCFullYear(), c.getUTCMonth(), c.getUTCDate() + 1) : c;
+    const [h, m] = l.end_time.split(":").map(Number);
+    end = zonedInstant(c2.getUTCFullYear(), c2.getUTCMonth() + 1, c2.getUTCDate(), h, m, zone);
+  }
   return { start, end, underway: start <= now && now < end };
 }
 
@@ -420,9 +426,17 @@ export function isoDate(d: Date): string {
 }
 
 /**
- * A meeting's time on its line (NETL-045): here, "19:00–19:30"; and when the
- * listing's zone isn't this computer's, its own time after: "20:00–21:00 ·
- * 01:00Z". With no meeting in reach, its written times.
+ * " · 01:00Z": an instant in Zulu, to follow its local time (NETL-045); ""
+ * when this computer keeps UTC, as the local time already is Zulu.
+ */
+export function zuluAfter(instant: Date): string {
+  return localZone() === "UTC" ? "" : ` · ${timeIn(instant, "UTC")}`;
+}
+
+/**
+ * A meeting's time on its line (NETL-045): here, then in Zulu: "20:00–21:00 ·
+ * 01:00Z", whatever zone the listing is written in. With no meeting in reach,
+ * its written times.
  */
 export function meetingTimes(l: Schedule, m: Meeting | null): string {
   if (l.all_day) return "All day"; // NETL-028
@@ -433,7 +447,7 @@ export function meetingTimes(l: Schedule, m: Meeting | null): string {
     return label === "Z" ? `${written}Z` : `${written} ${label}`;
   }
   const here = l.end_time ? `${hhmm(m.start)}–${hhmm(m.end)}` : hhmm(m.start);
-  return isOtherZone(l) ? `${here} · ${timeIn(m.start, zoneOf(l))}` : here;
+  return here + zuluAfter(m.start);
 }
 
 /**

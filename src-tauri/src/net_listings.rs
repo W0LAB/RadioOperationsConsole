@@ -169,8 +169,9 @@ pub fn clean_session(mut s: NetSession) -> Result<NetSession, String> {
         let Some(end) = minutes(&s.end_time) else {
             return Err("Enter the end time as HH:MM, or leave it blank.".into());
         };
-        if end <= start {
-            return Err("The end time should be after the start time.".into());
+        // An end before the start is the next day: 22:00–01:00 runs overnight (NETL-004).
+        if end == start {
+            return Err("The end time should differ from the start time.".into());
         }
     }
     Ok(s)
@@ -417,7 +418,7 @@ mod tests {
         assert!(bad(|d| d.sessions[0].weekdays = vec![7]).contains("Weekdays"));
         assert!(bad(|d| d.sessions[0].start_time = "7pm".into()).contains("HH:MM"));
         assert!(bad(|d| d.sessions[0].start_time = "24:00".into()).contains("HH:MM"));
-        assert!(bad(|d| d.sessions[0].end_time = "18:00".into()).contains("after"));
+        assert!(bad(|d| d.sessions[0].end_time = "19:00".into()).contains("differ"));
         assert!(bad(|d| d.sessions[0].schedule_kind = "daily".into()).contains("schedule"));
         assert!(bad(|d| d.sessions[0].schedule_kind = "monthly".into()).contains("weeks"));
         assert!(bad(|d| d.sessions[0].season = "spring".into()).contains("season"));
@@ -456,6 +457,13 @@ mod tests {
         assert!(!s.weekdays.is_empty(), "still needs its days");
         let whole = clean_session(NetSession { start_time: "00:00".into(), end_time: "23:59".into(), ..tuesday() }).unwrap();
         assert!(whole.all_day, "00:00–23:59 is all day");
+    }
+
+    #[test]
+    fn an_end_before_the_start_runs_overnight() {
+        // NETL-004
+        let s = clean_session(NetSession { start_time: "22:00".into(), end_time: "01:00".into(), ..tuesday() }).unwrap();
+        assert_eq!((s.start_time.as_str(), s.end_time.as_str(), s.all_day), ("22:00", "01:00", false));
     }
 
     #[test]

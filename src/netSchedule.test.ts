@@ -65,6 +65,15 @@ describe("nextMeeting (NETL-003, NETL-004, NETL-020)", () => {
     expect(nextMeeting(listing(), at(6, 19, 30))!.start).toEqual(at(13, 19, 0));
   });
 
+  it("runs a session overnight when its end is before its start (NETL-004)", () => {
+    const l = listing({ start_time: "22:00", end_time: "01:00" }); // Tuesdays
+    const m = nextMeeting(l, at(6, 23, 30))!;
+    expect([m.start, m.end, m.underway]).toEqual([at(6, 22, 0), at(7, 1, 0), true]);
+    // Still on after midnight, into Wednesday; then next Tuesday's.
+    expect(nextMeeting(l, at(7, 0, 30))!.underway).toBe(true);
+    expect(nextMeeting(l, at(7, 1, 0))!.start).toEqual(at(13, 22, 0));
+  });
+
   it("counts a net with no end time as under way for an hour", () => {
     const l = listing({ end_time: "" });
     expect(nextMeeting(l, at(6, 19, 59))!.underway).toBe(true);
@@ -245,12 +254,12 @@ describe("time zones (NETL-040–045)", () => {
     );
   });
 
-  it("keeps a net in this computer's zone at its time, with no second time", () => {
+  it("keeps a net in this computer's zone at its time, with Zulu after", () => {
     const tuesday = listing();
     const before = nextMeeting(tuesday, new Date(2026, 9, 26, 12))!;
     const after = nextMeeting(tuesday, new Date(2026, 10, 16, 12))!;
     expect([before.start.getHours(), after.start.getHours()]).toEqual([19, 19]);
-    expect(meetingTimes(tuesday, after)).toBe("19:00–19:30");
+    expect(meetingTimes(tuesday, after)).toBe("19:00–19:30 · 00:00Z");
     expect(describeSchedule(tuesday)).toBe("Tuesdays 19:00–19:30");
     expect(describeMeeting(after)).toBe("Tue Nov 17, 19:00 EST · Wed 00:00Z");
   });

@@ -163,7 +163,7 @@ describe("NetsTab", () => {
     await unfold(user, "Tuesday");
     await unfold(user, "As needed");
     const row = rowIn(day("Tuesday"), "Tuesday Night Net");
-    expect(within(row).getByText("19:00–19:30")).toBeInTheDocument();
+    expect(within(row).getByText("19:00–19:30 · 23:00Z")).toBeInTheDocument();
     expect(within(row).getByText("W4ABC Orlando")).toBeInTheDocument();
     expect(within(row).getByText("146.940 -0.600 PL 100.0")).toBeInTheDocument();
     expect(within(row).queryByText("Call sign and name, mobiles first")).not.toBeInTheDocument();
@@ -189,7 +189,22 @@ describe("NetsTab", () => {
       r.querySelector(".net-row-name")?.textContent,
     ]);
     // Tuesday's 19:00 net is more than 12 hours off.
-    expect(rows).toEqual([["in 20 min", "Morning Net"]]);
+    expect(rows).toEqual([["in 20 min · 11:00Z", "Morning Net"]]);
+  });
+
+  it("gives a net on now in another zone its end in that zone, not its start (NETL-025, NETL-045)", async () => {
+    vi.setSystemTime(new Date(2026, 9, 2, 9, 30)); // Friday 09:30 EDT = 13:30Z
+    vi.mocked(api.listNetListings).mockImplementation((retired = false) =>
+      Promise.resolve(
+        retired
+          ? []
+          : [listing({ id: "utc", name: "Zulu Net", time_zone: "UTC", weekdays: [5], start_time: "13:00", end_time: "14:00" })]
+      )
+    );
+    renderTab();
+    await screen.findAllByText("Zulu Net");
+    const box = screen.getByRole("region", { name: "Coming up" });
+    expect(box.querySelector(".net-coming-when")?.textContent).toBe("On now · until 10:00 · 14:00Z");
   });
 
   it("leaves Coming up out when no net is on or within 12 hours", async () => {
@@ -349,6 +364,8 @@ describe("NetsTab", () => {
       expect(screen.getByLabelText("Time zone")).toHaveDisplayValue("Zulu (UTC)");
       expect(screen.getByLabelText("Start time")).toHaveValue("01:00");
       expect(screen.getByText("Wednesdays 01:00 UTC")).toBeInTheDocument();
+      // The conversion, shown before saving (NETL-045).
+      expect(screen.getByLabelText("Next meeting")).toHaveTextContent("Tue Oct 6, 21:00 EDT · Wed 01:00Z");
       await user.click(screen.getByRole("button", { name: "Save net" }));
       expect(api.saveNetListing).toHaveBeenCalledWith(
         null,

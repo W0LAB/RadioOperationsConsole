@@ -11,7 +11,6 @@ import {
   describeListing,
   describeSchedule,
   isoDate,
-  isOtherZone,
   linesOf,
   meetingTimes,
   monthlyWeeks,
@@ -20,12 +19,12 @@ import {
   seasonNote,
   startsIn,
   weekView,
-  zoneOf,
+  zuluAfter,
   type Meeting,
   type NetLine,
   type WeekEntry,
 } from "../../netSchedule";
-import { localZone, timeIn, zoneName } from "../../timeZones";
+import { localZone, zoneName } from "../../timeZones";
 import { pad2 } from "../../utils";
 import NetListingForm, { EMPTY_LISTING } from "../nets/NetListingForm";
 import type { ActivityPrefill } from "../operations/activityPrefill";
@@ -473,8 +472,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
         </div>
       </div>
       <p className="settings-hint">
-        Times are shown in this computer's time, {zoneName(localZone())}; a net kept in another zone shows its own
-        time after ("20:00 · 01:00Z").
+        Times are shown in this computer's time, {zoneName(localZone())}, then in Zulu ("20:00 · 01:00Z").
         {!here && " Set a location on your operator to see how far each repeater is."}
       </p>
       {editing === "new" && (
@@ -511,7 +509,8 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
                 }
               >
                 {startsIn(meeting, now)}
-                {isOtherZone(l) && ` · ${timeIn(meeting.start, zoneOf(l))}`}
+                {/* Always followed by Zulu; beside "until 18:59", the end's (NETL-045). */}
+                {zuluAfter(meeting.underway ? meeting.end : meeting.start)}
               </span>
               <strong className="net-row-name">
           <ActivityTypeIcon type={l.activity_type} />
