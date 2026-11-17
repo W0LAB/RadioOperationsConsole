@@ -85,6 +85,8 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
   const [search, setSearch] = useState("");
   const [repeaterFilter, setRepeaterFilter] = useState("");
   const [showRetired, setShowRetired] = useState(false);
+  // The listing whose Delete is waiting to be confirmed (NETL-012).
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Rows with their details open, by day and net.
   const [openRows, setOpenRows] = useState<Set<string>>(new Set());
@@ -187,14 +189,34 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     }
   }
 
-  async function remove(l: NetListing) {
+  async function remove(l: { id: string }) {
     setError(null);
+    setDeleting(null);
     try {
       await api.deleteNetListing(l.id, selectedOperatorId);
       refresh();
     } catch (e) {
       setError(String(e));
     }
+  }
+
+  /** "Delete … for good?" under the net whose Delete was chosen (NETL-012). */
+  function deleteConfirm(l: { id: string; name: string }, retired = false) {
+    if (deleting !== l.id) return null;
+    return (
+      <div className="net-delete-confirm" role="group" aria-label={`Delete ${l.name}?`}>
+        <span>
+          Delete <strong>{l.name}</strong> for good? Activities started from it don't change.
+          {!retired && " To only hide it, retire it instead."}
+        </span>
+        <div className="inline-form">
+          <button className="danger" onClick={() => remove(l)}>
+            Delete
+          </button>
+          <button onClick={() => setDeleting(null)}>Cancel</button>
+        </div>
+      </div>
+    );
   }
 
   /** Starts an activity from one session's meeting (NETL-030). */
@@ -305,7 +327,16 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
           >
             Retire
           </button>
+          <button
+            className="link-button danger-link"
+            aria-label={`Delete ${l.name}`}
+            title="Delete it for good. Activities started from it don't change."
+            onClick={() => setDeleting(l.id)}
+          >
+            Delete
+          </button>
         </span>
+        {deleteConfirm({ id: l.id, name: l.name })}
       </div>
     );
   }
@@ -546,28 +577,31 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
           </button>
           {showRetired &&
             retired.map((l) => (
-              <div key={l.id} className="operator-row">
-                <span className="settings-hint">
-                  {l.name} — {describeListing(l)}
-                </span>
-                <span className="operator-row-actions">
-                  <button
-                    className="link-button"
-                    aria-label={`Restore ${l.name}`}
-                    onClick={() => setRetiredState(l, false)}
-                  >
-                    Restore
-                  </button>
-                  <button
-                    className="link-button danger-link"
-                    aria-label={`Delete ${l.name}`}
-                    title="Delete for good. Activities started from it don't change."
-                    onClick={() => remove(l)}
-                  >
-                    Delete
-                  </button>
-                </span>
-              </div>
+              <Fragment key={l.id}>
+                <div className="operator-row">
+                  <span className="settings-hint">
+                    {l.name} — {describeListing(l)}
+                  </span>
+                  <span className="operator-row-actions">
+                    <button
+                      className="link-button"
+                      aria-label={`Restore ${l.name}`}
+                      onClick={() => setRetiredState(l, false)}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      className="link-button danger-link"
+                      aria-label={`Delete ${l.name}`}
+                      title="Delete for good. Activities started from it don't change."
+                      onClick={() => setDeleting(l.id)}
+                    >
+                      Delete
+                    </button>
+                  </span>
+                </div>
+                {deleteConfirm({ id: l.id, name: l.name }, true)}
+              </Fragment>
             ))}
         </>
       )}

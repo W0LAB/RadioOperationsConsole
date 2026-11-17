@@ -98,13 +98,14 @@ written in, and the app works out when each meeting falls here.
 
 ## Managing listings
 
-- **NETL-010:** The operator MUST be able to add, edit, and retire listings.
-  A retired listing is hidden but kept, and MAY be restored.
+- **NETL-010:** The operator MUST be able to add, edit, retire, and delete
+  listings. A retired listing is hidden but kept, and MAY be restored.
 - **NETL-011:** Editing or retiring a listing MUST NOT change any activity
   started from it.
-- **NETL-012:** A retired listing MAY be deleted for good, from the retired
-  list (retiring first stands in for a confirmation). Activities started from
-  it MUST NOT change, and the history MUST keep showing its name.
+- **NETL-012:** A listing, in use or retired, MAY be deleted for good from
+  its details or from the retired list, once the operator confirms ("Delete
+  “Tuesday Night Net” for good?"). Activities started from it MUST NOT
+  change, and the history MUST keep showing its name.
 
 ## Time zones
 

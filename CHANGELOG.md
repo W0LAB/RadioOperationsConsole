@@ -23,6 +23,9 @@ top. Each release's section here is also its description on the
   given times. It's listed as "All day" at the top of its day (or of
   Daily), never dimmed or marked as on now, and left out of Coming up.
   Nets kept as 00:00–23:59 become all day when you upgrade or import them.
+- A net can be deleted for good straight from its details, without
+  retiring it first; you're asked to confirm. Activities started from it
+  don't change.
 - The form for adding or editing a net is calmer: each field has a label,
   frequency, days and time sit together under **When and where**, and who
   runs it, check-in, notes and activity type are folded under **More

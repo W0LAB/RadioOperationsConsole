@@ -8,6 +8,7 @@ vi.mock("../../api", () => ({
   listRepeaters: vi.fn(),
   saveNetListing: vi.fn(() => Promise.resolve("n9")),
   setNetListingRetired: vi.fn(() => Promise.resolve()),
+  deleteNetListing: vi.fn(() => Promise.resolve()),
 }));
 
 import * as api from "../../api";
@@ -233,6 +234,24 @@ describe("NetsTab", () => {
     expect(onStart).toHaveBeenLastCalledWith(
       expect.objectContaining({ date: "2026-10-02", time: "", frequency: "147.000", repeater: null })
     );
+  });
+
+  it("deletes a net in use for good, once confirmed (NETL-012)", async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await screen.findAllByText("Morning Net");
+    await user.click(within(day("Daily")).getByRole("button", { name: "Show details of Morning Net" }));
+    await user.click(within(day("Daily")).getByRole("button", { name: "Delete Morning Net" }));
+    const confirm = screen.getByRole("group", { name: "Delete Morning Net?" });
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("group", { name: "Delete Morning Net?" })).not.toBeInTheDocument();
+    expect(api.deleteNetListing).not.toHaveBeenCalled();
+
+    await user.click(within(day("Daily")).getByRole("button", { name: "Delete Morning Net" }));
+    await user.click(
+      within(screen.getByRole("group", { name: "Delete Morning Net?" })).getByRole("button", { name: "Delete" })
+    );
+    expect(api.deleteNetListing).toHaveBeenCalledWith("wkd", "op1");
   });
 
   it("edits a net listed under several days in one form", async () => {

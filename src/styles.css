@@ -2643,10 +2643,27 @@ button.online-pill-working-offline:hover {
 .net-row-details {
   grid-column: 2 / -1;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
   padding-bottom: 4px;
+}
+
+/* "Delete … for good?": a bar across the whole width, under the details or
+   the retired net it's for, question on the left and buttons on the right. */
+.net-delete-confirm {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 2px 0 6px 0;
+  padding: 6px 10px;
+  border: 1px solid var(--danger, #e05252);
+  border-radius: 4px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 /* The search, repeater filter and + Add net share the heading's line. */

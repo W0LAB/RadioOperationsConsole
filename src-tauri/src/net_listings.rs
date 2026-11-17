@@ -342,14 +342,11 @@ impl Repository {
         self.put_sessions(id, &d.sessions)
     }
 
-    /// Permanently deletes a retired listing and its sessions (NETL-012).
+    /// Permanently deletes a listing, in use or retired, and its sessions (NETL-012).
     /// Activities started from it keep their own copies. Returns what it was,
     /// for the history.
     pub fn delete_net_listing(&self, id: &str) -> Result<NetListingDetails, String> {
         let l = self.get_net_listing(id).map_err(|_| "That net no longer exists.".to_string())?;
-        if l.retired_at.is_empty() {
-            return Err("Retire the net before deleting it.".into());
-        }
         let tx = self.conn.unchecked_transaction().map_err(|e| e.to_string())?;
         self.conn.execute("DELETE FROM net_sessions WHERE listing_id = ?1", params![id]).map_err(|e| e.to_string())?;
         self.conn.execute("DELETE FROM net_listings WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
@@ -487,9 +484,7 @@ mod tests {
         r.set_net_listing_retired(&id, false).unwrap();
         assert_eq!(r.list_net_listings(false).unwrap().len(), 1);
 
-        // Deleted only once retired, sessions and all.
-        assert!(r.delete_net_listing(&id).unwrap_err().contains("Retire"));
-        r.set_net_listing_retired(&id, true).unwrap();
+        // Deleted in use, sessions and all, without retiring it first.
         assert_eq!(r.delete_net_listing(&id).unwrap().sessions.len(), 2);
         assert!(r.get_net_listing(&id).is_err());
         let left: i64 = r.conn.query_row("SELECT COUNT(*) FROM net_sessions", [], |x| x.get(0)).unwrap();
@@ -506,7 +501,6 @@ mod tests {
         utc.time_zone = "UTC".into();
         let b = r.create_net_listing(&utc).unwrap();
         assert_eq!(r.get_net_listing(&b).unwrap().details.time_zone, "UTC");
-
 
         // Listings from before time zones take this computer's, and only they.
         r.conn.execute("UPDATE net_listings SET time_zone = NULL WHERE id = ?1", params![a]).unwrap();

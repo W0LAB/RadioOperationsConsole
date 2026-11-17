@@ -59,7 +59,7 @@ pub fn set_net_listing_retired(
     Ok(())
 }
 
-/// Permanently deletes a retired listing, recording what it was (NETL-012).
+/// Permanently deletes a listing, in use or retired, recording what it was (NETL-012).
 #[tauri::command]
 pub fn delete_net_listing(state: State<AppState>, listing_id: String, operator_id: Option<String>) -> Result<(), String> {
     let repo = state.repo.lock().unwrap();
