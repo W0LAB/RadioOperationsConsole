@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "../../api";
-import type { NetListing, NetListingDetails, Operator, Repeater } from "../../types";
+import type { NetListing, NetListingDetails, NetSession, Operator, Repeater } from "../../types";
 import { haversineKm } from "../../geo";
 import { formatRepeater, tuningDetails } from "../../repeaters";
 import {
@@ -8,16 +8,21 @@ import {
   comingUp,
   dailyDays,
   describeMeeting,
+  describeListing,
   describeSchedule,
   isoDate,
   isOtherZone,
+  linesOf,
   meetingTimes,
   monthlyWeeks,
   nextMeeting,
+  seasonMark,
+  seasonNote,
   startsIn,
   weekView,
   zoneOf,
   type Meeting,
+  type NetLine,
   type WeekEntry,
 } from "../../netSchedule";
 import { localZone, timeIn, zoneName } from "../../timeZones";
@@ -119,17 +124,20 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
       ? { lat: operator.location_lat, lon: operator.location_lon }
       : null;
 
-  const repeaterOf = (l: NetListingDetails) =>
-    l.repeater_id ? repeaterById.get(l.repeater_id) : undefined;
+  /** Whether any of the listing's sessions meets on the repeater. */
+  const onRepeater = (l: NetListing, id: string) => l.sessions.some((s) => s.repeater_id === id);
+  const repeaterOf = (s: NetSession) => (s.repeater_id ? repeaterById.get(s.repeater_id) : undefined);
 
+  // A listing matches on any of its sessions' repeater or frequency (NETL-022).
   const query = search.trim().toLowerCase();
   const matching = listings.filter((l) => {
-    if (repeaterFilter && l.repeater_id !== repeaterFilter) return false;
+    if (repeaterFilter && !l.sessions.some((s) => s.repeater_id === repeaterFilter)) return false;
     if (!query) return true;
-    const r = repeaterOf(l);
-    return [l.name, l.run_by, l.frequency, r ? `${r.name} ${formatRepeater(r)}` : ""].some((v) =>
-      v.toLowerCase().includes(query)
-    );
+    const where = l.sessions.map((s) => {
+      const r = repeaterOf(s);
+      return `${s.frequency} ${r ? `${r.name} ${formatRepeater(r)}` : ""}`;
+    });
+    return [l.name, l.run_by, ...where].some((v) => v.toLowerCase().includes(query));
   });
   const week = weekView(matching, now);
   const filtering = query !== "" || repeaterFilter !== "";
@@ -169,7 +177,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     refresh();
   }
 
-  async function setRetiredState(l: NetListing, retire: boolean) {
+  async function setRetiredState(l: { id: string }, retire: boolean) {
     setError(null);
     try {
       await api.setNetListingRetired(l.id, retire, selectedOperatorId);
@@ -189,7 +197,8 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     }
   }
 
-  function start(l: NetListing, meeting: Meeting | null) {
+  /** Starts an activity from one session's meeting (NETL-030). */
+  function start(l: NetLine, meeting: Meeting | null) {
     const r = repeaterOf(l);
     onStartActivity({
       title: l.name,
@@ -214,10 +223,10 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
 
   // A listing being edited may name a retired repeater; keep it choosable.
   const formRepeaters = (l: NetListingDetails) =>
-    inUseRepeaters.concat(repeaters.filter((r) => r.retired_at && r.id === l.repeater_id));
+    inUseRepeaters.concat(repeaters.filter((r) => r.retired_at && l.sessions.some((s) => s.repeater_id === r.id)));
 
   /** The repeater and its frequency on one line ("W4ABC Orlando", "146.940 -0.600 PL 100.0"), or the typed frequency. */
-  function tuneLine(l: NetListing) {
+  function tuneLine(l: NetSession) {
     const r = repeaterOf(l);
     return (
       <span className="net-row-where">
@@ -228,7 +237,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     );
   }
 
-  function startButton(l: NetListing, meeting: Meeting | null) {
+  function startButton(l: NetLine, meeting: Meeting | null) {
     return (
       <button
         className="icon-button"
@@ -242,15 +251,27 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
   }
 
   /** Everything else about a net, under its row when ⓘ is clicked (NETL-021). */
-  function details(l: NetListing) {
+  function details(l: NetLine) {
     const r = repeaterOf(l);
     const km =
       here && r?.location_lat != null && r.location_lon != null
         ? haversineKm(here.lat, here.lon, r.location_lat, r.location_lon)
         : null;
     const next = nextMeeting(l, now);
+    // Every session's schedule when there are several, each with its frequency and season (NETL-008).
+    const sessions = linesOf(l.listing);
+    const meets =
+      sessions.length === 1
+        ? describeSchedule(l, now)
+        : sessions
+            .map((s) => {
+              const sr = repeaterOf(s);
+              const note = seasonNote(s, now);
+              return `${describeSchedule(s, now)} on ${sr ? sr.name : s.frequency}${note ? ` (${note})` : ""}`;
+            })
+            .join("; ");
     const facts: [string, string][] = [
-      ["Meets", describeSchedule(l, now)],
+      ["Meets", meets],
       // Here and in UTC, so both are at hand (NETL-045).
       // All day: when its day runs here, if that differs (NETL-028).
       ["Next", l.all_day ? allDayHere(l, next) : next ? describeMeeting(next) : ""],
@@ -294,14 +315,14 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
    * rest. `underway` and `over` only ever mark today's lines.
    */
   function row(
-    l: NetListing,
+    l: NetLine,
     meeting: Meeting | null,
     when: string,
     key: string,
     { underway = false, over = false } = {}
   ) {
     const open = openRows.has(key);
-    const weeks = monthlyWeeks(l) || dailyDays(l, now);
+    const weeks = [monthlyWeeks(l) || dailyDays(l, now), seasonMark(l, now)].filter(Boolean).join(" · ");
     return (
       <div
         key={key}
@@ -336,7 +357,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     !e.listing.all_day && e.meeting != null && e.meeting.underway && isoDate(e.meeting.start) === isoDate(now);
 
   /** The bands a section's nets need, once each, in the order first met: "2m, 70cm". */
-  function bandsOf(nets: NetListing[]): string {
+  function bandsOf(nets: NetSession[]): string {
     const labels = nets.map((l) => {
       const r = repeaterOf(l);
       return bandOf(r ? r.output_mhz : mhzFromText(l.frequency))?.label;
@@ -353,7 +374,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
     title: string,
     today: boolean,
     count: number,
-    nets: NetListing[],
+    nets: NetSession[],
     rows: () => React.ReactNode
   ) {
     const open = isOpen(key, today);
@@ -401,11 +422,11 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
               onChange={(e) => setSearch(e.target.value)}
             />
           )}
-          {repeaters.some((r) => listings.some((l) => l.repeater_id === r.id)) && (
+          {repeaters.some((r) => listings.some((l) => onRepeater(l, r.id))) && (
             <select aria-label="Show nets on" value={repeaterFilter} onChange={(e) => setRepeaterFilter(e.target.value)}>
               <option value="">All repeaters</option>
               {repeaters
-                .filter((r) => listings.some((l) => l.repeater_id === r.id))
+                .filter((r) => listings.some((l) => onRepeater(l, r.id)))
                 .map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name}
@@ -447,7 +468,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
         <section className="net-coming-up" aria-label="Coming up">
           <h4 className="net-day-heading">Coming up</h4>
           {next.map(({ listing: l, meeting }) => (
-            <div key={l.id} className={"net-coming-row" + (meeting.underway ? " net-row-underway" : "")}>
+            <div key={l.key} className={"net-coming-row" + (meeting.underway ? " net-row-underway" : "")}>
               <span
                 className={
                   "net-coming-when" +
@@ -486,7 +507,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
           {week.daily.length > 0 &&
             section("daily", "Daily", false, week.daily.length, week.daily.map((e) => e.listing), () =>
               week.daily.map((e) =>
-                row(e.listing, e.meeting, meetingTimes(e.listing, e.meeting), `daily-${e.listing.id}`, {
+                row(e.listing, e.meeting, meetingTimes(e.listing, e.meeting), `daily-${e.listing.key}`, {
                   underway: isToday(e),
                   over: e.overToday,
                 })
@@ -504,7 +525,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
                 day.entries.map((e) => e.listing),
                 () =>
                   day.entries.map((e) =>
-                    row(e.listing, e.meeting, meetingTimes(e.listing, e.meeting), `${day.name}-${e.listing.id}`, {
+                    row(e.listing, e.meeting, meetingTimes(e.listing, e.meeting), `${day.name}-${e.listing.key}`, {
                       underway: day.today && isToday(e),
                       over: e.overToday,
                     })
@@ -513,7 +534,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
             )}
           {week.asNeeded.length > 0 &&
             section("asneeded", "As needed", false, week.asNeeded.length, week.asNeeded, () =>
-              week.asNeeded.map((l) => row(l, null, "As needed", `asneeded-${l.id}`))
+              week.asNeeded.map((l) => row(l, null, "As needed", `asneeded-${l.key}`))
             )}
         </div>
       )}
@@ -527,7 +548,7 @@ export default function NetsTab({ operators, selectedOperatorId, onStartActivity
             retired.map((l) => (
               <div key={l.id} className="operator-row">
                 <span className="settings-hint">
-                  {l.name} — {describeSchedule(l)}
+                  {l.name} — {describeListing(l)}
                 </span>
                 <span className="operator-row-actions">
                   <button

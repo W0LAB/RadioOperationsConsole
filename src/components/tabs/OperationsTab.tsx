@@ -89,7 +89,10 @@ export default function OperationsTab({
   }, []);
   const netCounts = new Map<string, number>();
   for (const l of listings) {
-    if (l.repeater_id) netCounts.set(l.repeater_id, (netCounts.get(l.repeater_id) ?? 0) + 1);
+    // Once per listing, whichever of its sessions meet on the repeater.
+    for (const id of new Set(l.sessions.flatMap((s) => (s.repeater_id ? [s.repeater_id] : [])))) {
+      netCounts.set(id, (netCounts.get(id) ?? 0) + 1);
+    }
   }
 
 

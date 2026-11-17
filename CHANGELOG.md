@@ -8,20 +8,36 @@ top. Each release's section here is also its description on the
 
 **What works differently:**
 - Each net in **Nets** now keeps the time zone its times are written in.
-  When adding or editing a net, choose **Local**, **Zulu (UTC)**, or
-  **Other…** beside the times, and type them as the net publishes them.
+  When adding or editing a net, pick **Local**, **Zulu (UTC)** or any
+  other zone from **Times in** beside the times, and type them as the net
+  publishes them.
   The list works out when each meeting falls here: a Zulu net moves an hour
   on your clock when daylight-saving time starts or ends, and is listed
   under the day it falls on here (Wednesday 01:00Z is Tuesday evening in the
   US). A net in another zone shows its own time after yours
   ("20:00 · 01:00Z"), and its details give the next meeting here and in UTC.
 - Nets you already have keep your computer's time zone, so none of them
-  moves. If one was entered in Zulu, edit it and choose **Zulu (UTC)**
-  beside its times; its times stay as written.
+  moves. If one was entered in Zulu, edit it and choose **Zulu (UTC)** in
+  **Times in**; its times stay as written.
 - A net on the air around the clock can be marked **All day** instead of
   given times. It's listed as "All day" at the top of its day (or of
   Daily), never dimmed or marked as on now, and left out of Coming up.
   Nets kept as 00:00–23:59 become all day when you upgrade or import them.
+- The form for adding or editing a net is calmer: each field has a label,
+  frequency, days and time sit together under **When and where**, and who
+  runs it, check-in, notes and activity type are folded under **More
+  details** until you need them.
+- A net can meet on several frequencies or schedules: each its own
+  frequency or repeater, days and times, so a net on 20m, 40m and 80m, or
+  on one frequency in the morning and another after, is one net. Choose
+  **+ Also meets on another frequency or day** in the net's form. Each is
+  its own line in the week, and the net's details list them all. Nets you
+  have meet once; nothing changes until you add another.
+- Each of those can be **summer only** or **winter only** (summer is while
+  daylight-saving time is kept). Only the one in season is listed; its
+  details say when the other comes back ("Summer only · from Mar 14").
+- Importing a net list now makes rows with the same name one net's
+  frequencies and schedules, instead of keeping only the first. Their notes are kept.
 - Exported net lists carry each net's time zone and whether it's all day.
   A list exported by an older version is read in your time zone, and the
   import says so.

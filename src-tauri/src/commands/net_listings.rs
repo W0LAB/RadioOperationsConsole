@@ -19,16 +19,19 @@ pub fn save_net_listing(
 ) -> Result<String, String> {
     let details = net_listings::clean(details)?;
     let repo = state.repo.lock().unwrap();
-    if let Some(rid) = &details.repeater_id {
+    for rid in details.sessions.iter().filter_map(|s| s.repeater_id.as_ref()) {
         if !repo.repeater_exists(rid).map_err(|e| e.to_string())? {
             return Err("That repeater is no longer in the directory.".into());
         }
     }
+    // The listing, its sessions and the history go in together.
+    let tx = repo.conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let Some(id) = listing_id else {
         let id = repo.create_net_listing(&details).map_err(|e| e.to_string())?;
         let data = serde_json::json!({ "after": details }).to_string();
         repo.create_audit_event("net_listing", &id, "create", Some(&data), operator_id.as_deref())
             .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
         return Ok(id);
     };
     let before = repo.get_net_listing(&id).map_err(|_| "That net listing no longer exists.".to_string())?;
@@ -36,6 +39,7 @@ pub fn save_net_listing(
     let data = serde_json::json!({ "before": before.details, "after": details }).to_string();
     repo.create_audit_event("net_listing", &id, "correct", Some(&data), operator_id.as_deref())
         .map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
     Ok(id)
 }
 

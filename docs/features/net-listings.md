@@ -86,8 +86,11 @@ written in, and the app works out when each meeting falls here.
   comes back ("Summer only · from Mar 14").
 - **NETL-009:** A listing with one session MUST be entered and shown as
   simply as a listing was before sessions: the form shows one frequency and
-  one schedule, and the word "session" appears only once a second session
-  is added. The name, activity type, time zone, who runs it, check-in
+  one schedule. Once a second session is added, the form heads the first
+  **Meets** and the others **Also meets**, offers **+ Also meets on another
+  frequency or day**, and names each in labels and problems by its place
+  ("2nd schedule: …"). The word "session" MUST NOT be shown: it means a net
+  run within an activity (see the domain language). The name, activity type, time zone, who runs it, check-in
   instructions and notes belong to the listing and are shared by all of its
   sessions. Retiring, restoring or deleting a listing does so for every
   session. A session MAY be removed from a listing that has another.
@@ -109,8 +112,9 @@ written in, and the app works out when each meeting falls here.
   and times are written in. It is UTC (shown as "UTC (Zulu)"), this
   computer's zone, or any other named zone (an IANA name such as
   `America/Chicago`, offered by place name). The form MUST offer it as one
-  choice beside the times: **Local** (naming this computer's zone),
-  **Zulu (UTC)**, or **Other…**. A new listing MUST start on Local, so a
+  dropdown labelled "Times in" beside the times (with several sessions,
+  once above all of them): **Local** (naming this computer's zone) and
+  **Zulu (UTC)** first, then every other zone by name. A new listing MUST start on Local, so a
   net published in local time is entered exactly as published, and one
   published in Zulu is entered in Zulu just as directly. Neither is
   converted by hand. The zone MUST be stored by
@@ -119,7 +123,8 @@ written in, and the app works out when each meeting falls here.
 - **NETL-041:** Changing a listing's time zone MUST keep the days and times
   as written and change only the zone they are read in, because the change
   corrects a listing entered in the wrong zone. The form MUST say which zone
-  the times are in, beside them ("Times are UTC").
+  the times are in, beside them: the dropdown itself with one session, and
+  "Times are UTC" beside each session's times with several.
 - **NETL-042:** Each meeting MUST be worked out in the listing's zone (its
   date, weekday, week of the month, start and end) and then shown in this
   computer's zone. A UTC net MUST therefore move an hour on the local clock
@@ -267,10 +272,8 @@ written in, and the app works out when each meeting falls here.
   spreadsheets won't share one layout; it needs either a fixed template to
   fill in or a column-matching step, decided when it's built.
 - Printing or exporting the list.
-- Sessions (`NETL-002`, `NETL-008`, `NETL-009`), with the seasons they
-  bring (`NETL-046`). Until they're built, a listing has one frequency and
-  one schedule, and all day (`NETL-004`, `NETL-028`, `NETL-049`) belongs to
-  the listing.
+- Merging listings that already exist into one listing's sessions. For now
+  that is done by adding the sessions to one and retiring the others.
 
 ## Acceptance examples
 

@@ -239,10 +239,12 @@ impl Repository {
         for l in self.list_net_listings(false).map_err(|e| e.to_string())?.into_iter()
             .chain(self.list_net_listings(true).map_err(|e| e.to_string())?)
         {
-            if l.details.repeater_id.as_deref() == Some(id) {
+            if l.details.sessions.iter().any(|s| s.repeater_id.as_deref() == Some(id)) {
                 let mut after = l.details.clone();
-                after.repeater_id = None;
-                after.frequency = text.clone();
+                for s in after.sessions.iter_mut().filter(|s| s.repeater_id.as_deref() == Some(id)) {
+                    s.repeater_id = None;
+                    s.frequency = text.clone();
+                }
                 self.update_net_listing(&l.id, &after).map_err(|e| e.to_string())?;
                 changed.push((l.id, l.details, after));
             }
@@ -373,9 +375,12 @@ mod tests {
         let id = r.create_repeater(&clean(w4abc()).unwrap()).unwrap();
         let net = crate::net_listings::clean(NetListingDetails {
             name: "ARES Net".into(),
-            repeater_id: Some(id.clone()),
-            schedule_kind: "as_needed".into(),
             time_zone: "UTC".into(),
+            sessions: vec![crate::net_listings::NetSession {
+                repeater_id: Some(id.clone()),
+                schedule_kind: "as_needed".into(),
+                ..Default::default()
+            }],
             ..Default::default()
         })
         .unwrap();
@@ -387,8 +392,8 @@ mod tests {
         assert_eq!(changed.len(), 1);
         assert!(r.get_repeater(&id).is_err());
         let after = r.get_net_listing(&net_id).unwrap().details;
-        assert_eq!(after.repeater_id, None);
-        assert_eq!(after.frequency, "W4ABC Orlando 146.940 -0.600 PL 100.0");
+        assert_eq!(after.sessions[0].repeater_id, None);
+        assert_eq!(after.sessions[0].frequency, "W4ABC Orlando 146.940 -0.600 PL 100.0");
         assert!(r.delete_repeater(&id).is_err());
     }
 

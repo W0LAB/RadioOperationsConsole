@@ -74,7 +74,7 @@ export function wallTime(instant: Date, zone: string): WallTime {
 }
 
 /** How far `zone` is ahead of UTC at `ms`, in milliseconds. */
-function offsetAt(ms: number, zone: string): number {
+export function offsetAt(ms: number, zone: string): number {
   const w = wallTime(new Date(ms), zone);
   const asUtc = Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute);
   return asUtc - Math.floor(ms / 60_000) * 60_000;
@@ -131,4 +131,20 @@ export function timeIn(instant: Date, zone: string): string {
 /** How a zone is named when choosing one: "UTC (Zulu)", or its name with underscores as spaces. */
 export function zoneName(zone: string): string {
   return zone === "UTC" ? "UTC (Zulu)" : zone.replace(/_/g, " ");
+}
+
+/** Whether `zone` keeps daylight-saving time in `year` (its January and July offsets differ). */
+export function keepsDaylightTime(zone: string, year: number): boolean {
+  return offsetAt(Date.UTC(year, 0, 1), zone) !== offsetAt(Date.UTC(year, 6, 1), zone);
+}
+
+/**
+ * Whether `zone` is on daylight-saving time at `instant`: ahead of its
+ * standard offset, north or south of the equator alike (NETL-046).
+ */
+export function isDaylightTime(instant: Date, zone: string): boolean {
+  const year = wallTime(instant, zone).year;
+  const jan = offsetAt(Date.UTC(year, 0, 1), zone);
+  const jul = offsetAt(Date.UTC(year, 6, 1), zone);
+  return jan !== jul && offsetAt(instant.getTime(), zone) === Math.max(jan, jul);
 }

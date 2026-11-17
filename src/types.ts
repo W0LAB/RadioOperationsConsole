@@ -115,10 +115,11 @@ export interface Place extends PlaceDetails {
 /** How often a listed net meets (net-listings.md). */
 export type ScheduleKind = "weekly" | "monthly" | "as_needed";
 
-/** What's entered for a net listing. */
-export interface NetListingDetails {
-  name: string;
-  activity_type: string;
+/** "" all year, or the season a session meets in (NETL-008). */
+export type Season = "" | "summer" | "winter";
+
+/** One way a net meets: its frequency and schedule (NETL-002–004, NETL-008). */
+export interface NetSession {
   /** A repeater from the directory, or null for free-text frequency. */
   repeater_id: string | null;
   frequency: string;
@@ -129,19 +130,28 @@ export interface NetListingDetails {
   weeks: string[];
   /** On the air the whole day it meets, with no times (NETL-004). */
   all_day: boolean;
-  /** "HH:MM" in `time_zone`; "" for as needed or all day. */
+  /** "HH:MM" in the listing's `time_zone`; "" for as needed or all day. */
   start_time: string;
-  /** Optional "HH:MM" in `time_zone`. */
+  /** Optional "HH:MM" in the listing's `time_zone`. */
   end_time: string;
+  season: Season;
+}
+
+/** What's entered for a net listing: what its sessions share (NETL-009), and the sessions. */
+export interface NetListingDetails {
+  name: string;
+  activity_type: string;
   run_by: string;
   /** What to know before checking in ("call sign and name, mobiles first"). */
   checkin_info: string;
   notes: string;
   /**
-   * The zone the days and times are written in, by IANA name: "UTC",
-   * "America/New_York" (NETL-040).
+   * The zone the sessions' days and times are written in, by IANA name:
+   * "UTC", "America/New_York" (NETL-040).
    */
   time_zone: string;
+  /** One or more, in order (NETL-002). */
+  sessions: NetSession[];
 }
 
 export interface NetListing extends NetListingDetails {

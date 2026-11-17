@@ -66,6 +66,8 @@ const FIELD_NAMES: Record<string, string> = {
   weekdays: "days",
   weeks: "weeks",
   all_day: "all day",
+  season: "season",
+  sessions: "frequencies and schedules",
   start_time: "start time",
   end_time: "end time",
   time_zone: "time zone",
@@ -99,6 +101,8 @@ export function changes(before: unknown, after: unknown): string {
     if (o && typeof o === "object" && !Array.isArray(o)) {
       for (const [k, v] of Object.entries(o as Json)) {
         if (v && typeof v === "object" && !Array.isArray(v)) flat(v, out);
+        // One net session reads as the net's own fields (NETL-009); several, as "frequencies and schedules".
+        else if (k === "sessions" && Array.isArray(v) && v.length === 1) flat(v[0], out);
         else out[k] = v;
       }
     }

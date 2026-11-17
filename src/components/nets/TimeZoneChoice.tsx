@@ -1,72 +1,34 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { allZones, localZone, zoneName } from "../../timeZones";
 
 /**
- * Which time zone a net's times are written in (NETL-040): Local, Zulu
- * (UTC), or any other zone by name. A net is entered as it is published,
- * never converted by hand. Changing it keeps the times as written (NETL-041).
+ * Which time zone a net's times are written in (NETL-040): one dropdown
+ * offering Local and Zulu (UTC) first, then every other zone by name. A net
+ * is entered as it is published, never converted by hand. Changing it keeps
+ * the times as written (NETL-041).
  */
-export default function TimeZoneChoice({
-  value,
-  onChange,
-  name = "net-time-zone",
-}: {
-  value: string;
-  onChange: (zone: string) => void;
-  /** Groups the radio buttons; differs when two choices are on screen. */
-  name?: string;
-}) {
+export default function TimeZoneChoice({ value, onChange }: { value: string; onChange: (zone: string) => void }) {
   const local = localZone();
-  const choice = value === local ? "local" : value === "UTC" ? "utc" : "other";
-  // "Other…" stays open once chosen, even while it holds this computer's zone or UTC.
-  const [otherOpen, setOtherOpen] = useState(choice === "other");
-  const zones = useMemo(allZones, []);
-  const shown = otherOpen ? "other" : choice;
+  const others = useMemo(() => allZones().filter((z) => z !== local && z !== "UTC"), [local]);
+  // A stored zone this browser doesn't list still shows, as itself.
+  const unlisted = value !== local && value !== "UTC" && !others.includes(value);
 
   return (
-    <div className="inline-form" role="radiogroup" aria-label="Time zone">
-      <span aria-hidden="true">Times are in</span>
-      <label className="checkbox-row">
-        <input
-          type="radio"
-          name={name}
-          checked={shown === "local"}
-          onChange={() => {
-            setOtherOpen(false);
-            onChange(local);
-          }}
-        />
-        Local ({zoneName(local)})
-      </label>
-      {local !== "UTC" && (
-        <label className="checkbox-row">
-          <input
-            type="radio"
-            name={name}
-            checked={shown === "utc"}
-            onChange={() => {
-              setOtherOpen(false);
-              onChange("UTC");
-            }}
-          />
-          Zulu (UTC)
-        </label>
-      )}
-      <label className="checkbox-row">
-        <input type="radio" name={name} checked={shown === "other"} onChange={() => setOtherOpen(true)} />
-        Other…
-      </label>
-      {shown === "other" && (
-        <select aria-label="Other time zone" value={value} onChange={(e) => onChange(e.target.value)}>
-          {!zones.includes(value) && <option value={value}>{zoneName(value)}</option>}
-          {zones.map((z) => (
+    <label className="net-zone">
+      Times in
+      <select aria-label="Time zone" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value={local}>Local ({zoneName(local)})</option>
+        {local !== "UTC" && <option value="UTC">Zulu (UTC)</option>}
+        {unlisted && <option value={value}>{zoneName(value)}</option>}
+        <optgroup label="Other zones">
+          {others.map((z) => (
             <option key={z} value={z}>
               {zoneName(z)}
             </option>
           ))}
-        </select>
-      )}
-    </div>
+        </optgroup>
+      </select>
+    </label>
   );
 }
 

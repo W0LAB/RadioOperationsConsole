@@ -19,11 +19,28 @@ pub struct NetListing {
     pub retired_at: String,
 }
 
-/// What the operator enters for a listing.
+/// What the operator enters for a listing: what all its sessions share
+/// (NETL-009), and the sessions.
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct NetListingDetails {
     pub name: String,
     pub activity_type: String,
+    pub run_by: String,
+    /// What to know before checking in (NETL-006).
+    pub checkin_info: String,
+    pub notes: String,
+    /// The zone the sessions' days and times are written in, by IANA name:
+    /// "UTC", "America/New_York" (NETL-040). Empty only from an older list
+    /// file, until it is filled in with this computer's.
+    #[serde(default)]
+    pub time_zone: String,
+    /// One or more, in order (NETL-002).
+    pub sessions: Vec<NetSession>,
+}
+
+/// One way a net meets: its frequency and schedule (NETL-002–004, NETL-008).
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct NetSession {
     /// A repeater from the directory, or None for free-text frequency.
     pub repeater_id: Option<String>,
     pub frequency: String,
@@ -33,22 +50,16 @@ pub struct NetListingDetails {
     pub weekdays: Vec<u8>,
     /// Monthly only: "1"–"4" or "last".
     pub weeks: Vec<String>,
-    /// On the air the whole day it meets, in `time_zone`, with no times (NETL-004).
+    /// On the air the whole day it meets, with no times (NETL-004).
     #[serde(default)]
     pub all_day: bool,
-    /// "HH:MM" in `time_zone`; empty for "as needed" or all day.
+    /// "HH:MM" in the listing's zone; empty for "as needed" or all day.
     pub start_time: String,
     /// Optional; empty when not given.
     pub end_time: String,
-    pub run_by: String,
-    /// What to know before checking in (NETL-006).
-    pub checkin_info: String,
-    pub notes: String,
-    /// The zone the days and times are written in, by IANA name: "UTC",
-    /// "America/New_York" (NETL-040). Empty only from an older interface or
-    /// list file, until it is filled in with this computer's.
+    /// "" all year, "summer" or "winter" (NETL-008).
     #[serde(default)]
-    pub time_zone: String,
+    pub season: String,
 }
 
 /// This computer's time zone by IANA name, or UTC if it can't be told.
@@ -99,71 +110,106 @@ fn minutes(t: &str) -> Option<u32> {
     (h < 24 && m < 60).then_some(h * 60 + m)
 }
 
-/// Checks and tidies what was entered (NETL-001–005, NETL-040).
-pub fn clean(mut d: NetListingDetails) -> Result<NetListingDetails, String> {
-    d.time_zone = clean_time_zone(&d.time_zone)?;
-    for text in [&mut d.name, &mut d.frequency, &mut d.run_by, &mut d.checkin_info, &mut d.notes, &mut d.start_time, &mut d.end_time] {
+/// Checks and tidies one session (NETL-002–004, NETL-008).
+pub fn clean_session(mut s: NetSession) -> Result<NetSession, String> {
+    for text in [&mut s.frequency, &mut s.start_time, &mut s.end_time, &mut s.season] {
         *text = text.trim().to_string();
     }
-    if d.name.is_empty() {
-        return Err("A net listing needs a name.".into());
-    }
-    d.activity_type = Repository::clean_activity_type(&d.activity_type);
-    d.repeater_id = d.repeater_id.filter(|id| !id.trim().is_empty());
-    if d.repeater_id.is_some() {
+    s.repeater_id = s.repeater_id.filter(|id| !id.trim().is_empty());
+    if s.repeater_id.is_some() {
         // The repeater's own frequency is shown; free text would only conflict.
-        d.frequency.clear();
+        s.frequency.clear();
     }
-    match d.schedule_kind.as_str() {
+    if !["", "summer", "winter"].contains(&s.season.as_str()) {
+        return Err(format!("\"{}\" isn't a season. Use summer, winter, or all year.", s.season));
+    }
+    match s.schedule_kind.as_str() {
         "as_needed" => {
-            d.weekdays.clear();
-            d.weeks.clear();
-            d.start_time.clear();
-            d.end_time.clear();
-            d.all_day = false;
-            return Ok(d);
+            s.weekdays.clear();
+            s.weeks.clear();
+            s.start_time.clear();
+            s.end_time.clear();
+            s.all_day = false;
+            return Ok(s);
         }
-        "weekly" => d.weeks.clear(),
+        "weekly" => s.weeks.clear(),
         "monthly" => {
-            if d.weeks.is_empty() {
+            if s.weeks.is_empty() {
                 return Err("Choose which weeks of the month the net meets.".into());
             }
-            if let Some(w) = d.weeks.iter().find(|w| !WEEKS.contains(&w.as_str())) {
+            if let Some(w) = s.weeks.iter().find(|w| !WEEKS.contains(&w.as_str())) {
                 return Err(format!("\"{w}\" isn't a week of the month."));
             }
-            d.weeks.sort_by_key(|w| WEEKS.iter().position(|x| x == w));
-            d.weeks.dedup();
+            s.weeks.sort_by_key(|w| WEEKS.iter().position(|x| x == w));
+            s.weeks.dedup();
         }
         other => return Err(format!("\"{other}\" isn't a schedule. Use weekly, monthly or as needed.")),
     }
-    if d.weekdays.is_empty() {
+    if s.weekdays.is_empty() {
         return Err("Choose the day or days the net meets.".into());
     }
-    if d.weekdays.iter().any(|&w| w > 6) {
+    if s.weekdays.iter().any(|&w| w > 6) {
         return Err("Weekdays run from 0 (Sunday) to 6 (Saturday).".into());
     }
-    d.weekdays.sort_unstable();
-    d.weekdays.dedup();
+    s.weekdays.sort_unstable();
+    s.weekdays.dedup();
     // 00:00–23:59 is the whole day (NETL-049).
-    if d.start_time == "00:00" && d.end_time == "23:59" {
-        d.all_day = true;
+    if s.start_time == "00:00" && s.end_time == "23:59" {
+        s.all_day = true;
     }
-    if d.all_day {
-        d.start_time.clear();
-        d.end_time.clear();
-        return Ok(d);
+    if s.all_day {
+        s.start_time.clear();
+        s.end_time.clear();
+        return Ok(s);
     }
-    let Some(start) = minutes(&d.start_time) else {
+    let Some(start) = minutes(&s.start_time) else {
         return Err("Enter the start time as HH:MM, for example 19:00.".into());
     };
-    if !d.end_time.is_empty() {
-        let Some(end) = minutes(&d.end_time) else {
+    if !s.end_time.is_empty() {
+        let Some(end) = minutes(&s.end_time) else {
             return Err("Enter the end time as HH:MM, or leave it blank.".into());
         };
         if end <= start {
             return Err("The end time should be after the start time.".into());
         }
     }
+    Ok(s)
+}
+
+/// "1st schedule", "2nd schedule"…: a session as the form names it (NETL-009).
+fn schedule_name(index: usize) -> String {
+    let n = index + 1;
+    let suffix = match (n % 10, n % 100) {
+        (_, 11..=13) => "th",
+        (1, _) => "st",
+        (2, _) => "nd",
+        (3, _) => "rd",
+        _ => "th",
+    };
+    format!("{n}{suffix} schedule")
+}
+
+/// Checks and tidies what was entered (NETL-001–009, NETL-040). With more
+/// than one session, a problem says which ("2nd schedule: …"); the word
+/// "session" is never shown (NETL-009).
+pub fn clean(mut d: NetListingDetails) -> Result<NetListingDetails, String> {
+    d.time_zone = clean_time_zone(&d.time_zone)?;
+    for text in [&mut d.name, &mut d.run_by, &mut d.checkin_info, &mut d.notes] {
+        *text = text.trim().to_string();
+    }
+    if d.name.is_empty() {
+        return Err("A net listing needs a name.".into());
+    }
+    if d.sessions.is_empty() {
+        return Err("A net needs at least one frequency and schedule: when and where it meets.".into());
+    }
+    d.activity_type = Repository::clean_activity_type(&d.activity_type);
+    let several = d.sessions.len() > 1;
+    d.sessions = std::mem::take(&mut d.sessions)
+        .into_iter()
+        .enumerate()
+        .map(|(i, s)| clean_session(s).map_err(|e| if several { format!("{}: {e}", schedule_name(i)) } else { e }))
+        .collect::<Result<_, _>>()?;
     Ok(d)
 }
 
@@ -175,48 +221,78 @@ fn blank(s: &str) -> Option<&str> {
     if s.is_empty() { None } else { Some(s) }
 }
 
-const COLS: &str = "id, name, activity_type, repeater_id, coalesce(frequency,''), schedule_kind, coalesce(weekdays,''), coalesce(weeks,''), coalesce(start_time,''), coalesce(end_time,''), coalesce(run_by,''), coalesce(notes,''), coalesce(retired_at,''), coalesce(checkin_info,''), coalesce(time_zone,''), all_day";
+const COLS: &str = "id, name, activity_type, coalesce(run_by,''), coalesce(checkin_info,''), coalesce(notes,''), coalesce(time_zone,''), coalesce(retired_at,'')";
 
 fn map(r: &rusqlite::Row) -> rusqlite::Result<NetListing> {
-    let weekdays: String = r.get(6)?;
-    let weeks: String = r.get(7)?;
     Ok(NetListing {
         id: r.get(0)?,
         details: NetListingDetails {
             name: r.get(1)?,
             activity_type: r.get(2)?,
-            repeater_id: r.get(3)?,
-            frequency: r.get(4)?,
-            schedule_kind: r.get(5)?,
-            weekdays: weekdays.split(',').filter_map(|w| w.parse().ok()).collect(),
-            weeks: weeks.split(',').filter(|w| !w.is_empty()).map(String::from).collect(),
-            start_time: r.get(8)?,
-            end_time: r.get(9)?,
-            run_by: r.get(10)?,
-            checkin_info: r.get(13)?,
-            notes: r.get(11)?,
-            time_zone: r.get(14)?,
-            all_day: r.get(15)?,
+            run_by: r.get(3)?,
+            checkin_info: r.get(4)?,
+            notes: r.get(5)?,
+            time_zone: r.get(6)?,
+            sessions: Vec::new(),
         },
-        retired_at: r.get(12)?,
+        retired_at: r.get(7)?,
     })
 }
 
+const SESSION_COLS: &str = "listing_id, repeater_id, coalesce(frequency,''), schedule_kind, coalesce(weekdays,''), coalesce(weeks,''), all_day, coalesce(start_time,''), coalesce(end_time,''), season";
+
+fn map_session(r: &rusqlite::Row) -> rusqlite::Result<(String, NetSession)> {
+    let weekdays: String = r.get(4)?;
+    let weeks: String = r.get(5)?;
+    Ok((
+        r.get(0)?,
+        NetSession {
+            repeater_id: r.get(1)?,
+            frequency: r.get(2)?,
+            schedule_kind: r.get(3)?,
+            weekdays: weekdays.split(',').filter_map(|w| w.parse().ok()).collect(),
+            weeks: weeks.split(',').filter(|w| !w.is_empty()).map(String::from).collect(),
+            all_day: r.get(6)?,
+            start_time: r.get(7)?,
+            end_time: r.get(8)?,
+            season: r.get(9)?,
+        },
+    ))
+}
+
 impl Repository {
-    /// In-use (or, with `retired`, retired) listings by name. When each next
-    /// meets is worked out in the interface (NETL-020).
+    /// Fills in each listing's sessions, in order.
+    fn with_sessions(&self, mut listings: Vec<NetListing>) -> rusqlite::Result<Vec<NetListing>> {
+        let mut stmt = self
+            .conn
+            .prepare(&format!("SELECT {SESSION_COLS} FROM net_sessions ORDER BY listing_id, position"))?;
+        let mut by_listing: std::collections::HashMap<String, Vec<NetSession>> = Default::default();
+        for row in stmt.query_map([], map_session)? {
+            let (id, s) = row?;
+            by_listing.entry(id).or_default().push(s);
+        }
+        for l in &mut listings {
+            l.details.sessions = by_listing.remove(&l.id).unwrap_or_default();
+        }
+        Ok(listings)
+    }
+
+    /// In-use (or, with `retired`, retired) listings by name, each with its
+    /// sessions. When each next meets is worked out in the interface (NETL-020).
     pub fn list_net_listings(&self, retired: bool) -> rusqlite::Result<Vec<NetListing>> {
         let filter = if retired { "IS NOT NULL" } else { "IS NULL" };
         let mut stmt = self.conn.prepare(&format!(
             "SELECT {COLS} FROM net_listings WHERE retired_at {filter} ORDER BY name COLLATE NOCASE"
         ))?;
-        let rows = stmt.query_map([], map)?;
-        rows.collect()
+        let rows = stmt.query_map([], map)?.collect::<rusqlite::Result<Vec<_>>>()?;
+        self.with_sessions(rows)
     }
 
     pub fn get_net_listing(&self, id: &str) -> rusqlite::Result<NetListing> {
-        self.conn
-            .query_row(&format!("SELECT {COLS} FROM net_listings WHERE id = ?1"), params![id], map)
+        let l = self
+            .conn
+            .query_row(&format!("SELECT {COLS} FROM net_listings WHERE id = ?1"), params![id], map)?;
+        Ok(self.with_sessions(vec![l])?.remove(0))
     }
 
     /// Whether a repeater exists (retired or not), for checking a listing's.
@@ -228,41 +304,61 @@ impl Repository {
             .is_some())
     }
 
-    /// Adds a listing (already checked with `clean`).
-    pub fn create_net_listing(&self, d: &NetListingDetails) -> rusqlite::Result<String> {
-        let id = Uuid::new_v4().to_string();
-        self.conn.execute(
-            "INSERT INTO net_listings(id, name, activity_type, repeater_id, frequency, schedule_kind, weekdays, weeks, start_time, end_time, run_by, notes, created_at, checkin_info, time_zone, all_day) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
-            params![id, d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), Utc::now().to_rfc3339(), blank(&d.checkin_info), d.time_zone, d.all_day],
-        )?;
-        Ok(id)
-    }
-
-    /// Replaces a listing's details (already checked with `clean`). Activities
-    /// started from it keep their own copies (NETL-011).
-    pub fn update_net_listing(&self, id: &str, d: &NetListingDetails) -> rusqlite::Result<()> {
-        let n = self.conn.execute(
-            "UPDATE net_listings SET name = ?1, activity_type = ?2, repeater_id = ?3, frequency = ?4, schedule_kind = ?5, weekdays = ?6, weeks = ?7, start_time = ?8, end_time = ?9, run_by = ?10, notes = ?11, checkin_info = ?12, time_zone = ?13, all_day = ?14 WHERE id = ?15",
-            params![d.name, d.activity_type, d.repeater_id, blank(&d.frequency), d.schedule_kind, join(&d.weekdays), join(&d.weeks), blank(&d.start_time), blank(&d.end_time), blank(&d.run_by), blank(&d.notes), blank(&d.checkin_info), d.time_zone, d.all_day, id],
-        )?;
-        if n == 0 {
-            return Err(rusqlite::Error::QueryReturnedNoRows);
+    /// Replaces a listing's sessions with `sessions`, in order.
+    fn put_sessions(&self, id: &str, sessions: &[NetSession]) -> rusqlite::Result<()> {
+        self.conn.execute("DELETE FROM net_sessions WHERE listing_id = ?1", params![id])?;
+        for (i, s) in sessions.iter().enumerate() {
+            self.conn.execute(
+                "INSERT INTO net_sessions(listing_id, position, repeater_id, frequency, schedule_kind, weekdays, weeks, start_time, end_time, all_day, season) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+                params![id, i as i64, s.repeater_id, blank(&s.frequency), s.schedule_kind, join(&s.weekdays), join(&s.weeks), blank(&s.start_time), blank(&s.end_time), s.all_day, s.season],
+            )?;
         }
         Ok(())
     }
 
-    /// Permanently deletes a retired listing (NETL-012). Activities started
-    /// from it keep their own copies. Returns what it was, for the history.
+    /// Adds a listing with its sessions (already checked with `clean`). The
+    /// caller holds a transaction around it, so the two go in together.
+    pub fn create_net_listing(&self, d: &NetListingDetails) -> rusqlite::Result<String> {
+        let id = Uuid::new_v4().to_string();
+        self.conn.execute(
+            "INSERT INTO net_listings(id, name, activity_type, run_by, checkin_info, notes, time_zone, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+            params![id, d.name, d.activity_type, blank(&d.run_by), blank(&d.checkin_info), blank(&d.notes), d.time_zone, Utc::now().to_rfc3339()],
+        )?;
+        self.put_sessions(&id, &d.sessions)?;
+        Ok(id)
+    }
+
+    /// Replaces a listing's details and sessions (already checked with
+    /// `clean`), inside the caller's transaction. Activities started from it
+    /// keep their own copies (NETL-011).
+    pub fn update_net_listing(&self, id: &str, d: &NetListingDetails) -> rusqlite::Result<()> {
+        let n = self.conn.execute(
+            "UPDATE net_listings SET name = ?1, activity_type = ?2, run_by = ?3, checkin_info = ?4, notes = ?5, time_zone = ?6 WHERE id = ?7",
+            params![d.name, d.activity_type, blank(&d.run_by), blank(&d.checkin_info), blank(&d.notes), d.time_zone, id],
+        )?;
+        if n == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        self.put_sessions(id, &d.sessions)
+    }
+
+    /// Permanently deletes a retired listing and its sessions (NETL-012).
+    /// Activities started from it keep their own copies. Returns what it was,
+    /// for the history.
     pub fn delete_net_listing(&self, id: &str) -> Result<NetListingDetails, String> {
         let l = self.get_net_listing(id).map_err(|_| "That net no longer exists.".to_string())?;
         if l.retired_at.is_empty() {
             return Err("Retire the net before deleting it.".into());
         }
+        let tx = self.conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        self.conn.execute("DELETE FROM net_sessions WHERE listing_id = ?1", params![id]).map_err(|e| e.to_string())?;
         self.conn.execute("DELETE FROM net_listings WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
         Ok(l.details)
     }
 
-    /// Hides (or, with `retired` false, restores) a listing (NETL-010).
+    /// Hides (or, with `retired` false, restores) a listing and so all its
+    /// sessions (NETL-010, NETL-009).
     pub fn set_net_listing_retired(&self, id: &str, retired: bool) -> rusqlite::Result<()> {
         let at = retired.then(|| Utc::now().to_rfc3339());
         self.conn
@@ -280,27 +376,36 @@ mod tests {
         Repository::new(crate::db::open_db(&path).unwrap())
     }
 
-    fn tuesday_net() -> NetListingDetails {
-        NetListingDetails {
-            name: " Tuesday Night Net ".into(),
-            activity_type: "directed_net".into(),
-            frequency: "146.520".into(),
+    fn tuesday() -> NetSession {
+        NetSession {
+            frequency: " 146.520 ".into(),
             schedule_kind: "weekly".into(),
             weekdays: vec![2],
             start_time: "19:00".into(),
             end_time: "19:30".into(),
+            ..Default::default()
+        }
+    }
+
+    fn tuesday_net() -> NetListingDetails {
+        NetListingDetails {
+            name: " Tuesday Night Net ".into(),
+            activity_type: "directed_net".into(),
             checkin_info: " Call sign and name, mobiles first ".into(),
             time_zone: " America/New_York ".into(),
+            sessions: vec![tuesday()],
             ..Default::default()
         }
     }
 
     #[test]
     fn entries_are_checked_and_tidied() {
-        // NETL-001, NETL-003, NETL-004
+        // NETL-001, NETL-003, NETL-004, NETL-040
         let d = clean(tuesday_net()).unwrap();
         assert_eq!(d.name, "Tuesday Night Net");
         assert_eq!(d.checkin_info, "Call sign and name, mobiles first");
+        assert_eq!(d.time_zone, "America/New_York");
+        assert_eq!(d.sessions[0].frequency, "146.520");
 
         let bad = |f: fn(&mut NetListingDetails)| {
             let mut d = tuesday_net();
@@ -308,106 +413,88 @@ mod tests {
             clean(d).unwrap_err()
         };
         assert!(bad(|d| d.name = " ".into()).contains("name"));
-        assert!(bad(|d| d.weekdays.clear()).contains("day"));
-        assert!(bad(|d| d.weekdays = vec![7]).contains("Weekdays"));
-        assert!(bad(|d| d.start_time = "7pm".into()).contains("HH:MM"));
-        assert!(bad(|d| d.start_time = "24:00".into()).contains("HH:MM"));
-        assert!(bad(|d| d.end_time = "18:00".into()).contains("after"));
-        assert!(bad(|d| d.schedule_kind = "daily".into()).contains("schedule"));
-        // NETL-040
-        assert_eq!(d.time_zone, "America/New_York");
         assert!(bad(|d| d.time_zone = " ".into()).contains("time zone"));
         assert!(bad(|d| d.time_zone = "Mars; DROP".into()).contains("isn't a time zone"));
-        assert!(bad(|d| d.schedule_kind = "monthly".into()).contains("weeks"));
+        assert!(bad(|d| d.sessions.clear()).contains("frequency and schedule"));
+        assert!(bad(|d| d.sessions[0].weekdays.clear()).contains("day"));
+        assert!(bad(|d| d.sessions[0].weekdays = vec![7]).contains("Weekdays"));
+        assert!(bad(|d| d.sessions[0].start_time = "7pm".into()).contains("HH:MM"));
+        assert!(bad(|d| d.sessions[0].start_time = "24:00".into()).contains("HH:MM"));
+        assert!(bad(|d| d.sessions[0].end_time = "18:00".into()).contains("after"));
+        assert!(bad(|d| d.sessions[0].schedule_kind = "daily".into()).contains("schedule"));
+        assert!(bad(|d| d.sessions[0].schedule_kind = "monthly".into()).contains("weeks"));
+        assert!(bad(|d| d.sessions[0].season = "spring".into()).contains("season"));
         assert!(bad(|d| {
-            d.schedule_kind = "monthly".into();
-            d.weeks = vec!["5".into()];
+            d.sessions[0].schedule_kind = "monthly".into();
+            d.sessions[0].weeks = vec!["5".into()];
         })
         .contains("week of the month"));
+        // With several sessions, a problem says which (NETL-002).
+        assert_eq!(
+            bad(|d| d.sessions.push(NetSession { start_time: "".into(), ..tuesday() })),
+            "2nd schedule: Enter the start time as HH:MM, for example 19:00."
+        );
 
         // As needed: no days or times.
-        let mut asn = tuesday_net();
-        asn.schedule_kind = "as_needed".into();
-        let asn = clean(asn).unwrap();
-        assert!(asn.weekdays.is_empty() && asn.start_time.is_empty() && asn.end_time.is_empty());
+        let asn = clean_session(NetSession { schedule_kind: "as_needed".into(), all_day: true, ..tuesday() }).unwrap();
+        assert!(asn.weekdays.is_empty() && asn.start_time.is_empty() && asn.end_time.is_empty() && !asn.all_day);
 
         // Weeks are put in order; a repeater replaces free-text frequency.
-        let mut monthly = tuesday_net();
-        monthly.schedule_kind = "monthly".into();
-        monthly.weeks = vec!["last".into(), "2".into(), "2".into()];
-        monthly.repeater_id = Some("r1".into());
-        let monthly = clean(monthly).unwrap();
+        let monthly = clean_session(NetSession {
+            schedule_kind: "monthly".into(),
+            weeks: vec!["last".into(), "2".into(), "2".into()],
+            repeater_id: Some("r1".into()),
+            ..tuesday()
+        })
+        .unwrap();
         assert_eq!(monthly.weeks, ["2", "last"]);
         assert_eq!(monthly.frequency, "");
     }
 
     #[test]
-    fn listings_are_stored_edited_and_retired() {
-        // NETL-010
+    fn all_day_sessions_have_no_times() {
+        // NETL-004, NETL-049
+        let s = clean_session(NetSession { all_day: true, ..tuesday() }).unwrap();
+        assert!(s.all_day && s.start_time.is_empty() && s.end_time.is_empty());
+        assert!(!s.weekdays.is_empty(), "still needs its days");
+        let whole = clean_session(NetSession { start_time: "00:00".into(), end_time: "23:59".into(), ..tuesday() }).unwrap();
+        assert!(whole.all_day, "00:00–23:59 is all day");
+    }
+
+    #[test]
+    fn listings_are_stored_with_their_sessions_edited_and_retired() {
+        // NETL-002, NETL-008, NETL-009, NETL-010, NETL-012
         let r = repo();
         let mut d = clean(tuesday_net()).unwrap();
-        d.weekdays = vec![1, 3, 5];
+        d.sessions.push(clean_session(NetSession { frequency: "7.110".into(), season: "summer".into(), weekdays: vec![1, 3, 5], ..tuesday() }).unwrap());
+        d.sessions.push(clean_session(NetSession { frequency: "3.588".into(), season: "winter".into(), all_day: true, ..tuesday() }).unwrap());
         let id = r.create_net_listing(&d).unwrap();
-        let got = r.get_net_listing(&id).unwrap();
-        assert_eq!(got.details, d);
+        assert_eq!(r.get_net_listing(&id).unwrap().details, d, "sessions come back in order");
 
         let mut changed = d.clone();
-        changed.schedule_kind = "monthly".into();
-        changed.weeks = vec!["1".into(), "last".into()];
+        changed.sessions.remove(0);
+        changed.sessions[0].schedule_kind = "monthly".into();
+        changed.sessions[0].weeks = vec!["1".into(), "last".into()];
         r.update_net_listing(&id, &changed).unwrap();
-        assert_eq!(r.get_net_listing(&id).unwrap().details.weeks, ["1", "last"]);
+        let got = r.get_net_listing(&id).unwrap().details;
+        assert_eq!(got.sessions.len(), 2);
+        assert_eq!(got.sessions[0].weeks, ["1", "last"]);
         assert!(r.update_net_listing("missing", &changed).is_err());
 
         r.set_net_listing_retired(&id, true).unwrap();
         assert!(r.list_net_listings(false).unwrap().is_empty());
-        assert_eq!(r.list_net_listings(true).unwrap().len(), 1);
+        assert_eq!(r.list_net_listings(true).unwrap()[0].details.sessions.len(), 2);
         r.set_net_listing_retired(&id, false).unwrap();
         assert_eq!(r.list_net_listings(false).unwrap().len(), 1);
 
-        // NETL-012: deleted only once retired.
+        // Deleted only once retired, sessions and all.
         assert!(r.delete_net_listing(&id).unwrap_err().contains("Retire"));
         r.set_net_listing_retired(&id, true).unwrap();
-        assert_eq!(r.delete_net_listing(&id).unwrap().schedule_kind, "monthly");
+        assert_eq!(r.delete_net_listing(&id).unwrap().sessions.len(), 2);
         assert!(r.get_net_listing(&id).is_err());
+        let left: i64 = r.conn.query_row("SELECT COUNT(*) FROM net_sessions", [], |x| x.get(0)).unwrap();
+        assert_eq!(left, 0);
         assert!(r.delete_net_listing(&id).is_err());
-    }
-
-    #[test]
-    fn all_day_nets_have_no_times() {
-        // NETL-004, NETL-049
-        let mut d = tuesday_net();
-        d.all_day = true;
-        let d = clean(d).unwrap();
-        assert!(d.all_day && d.start_time.is_empty() && d.end_time.is_empty());
-        assert!(!d.weekdays.is_empty(), "still needs its days");
-
-        let mut whole = tuesday_net();
-        (whole.start_time, whole.end_time) = ("00:00".into(), "23:59".into());
-        assert!(clean(whole).unwrap().all_day, "00:00–23:59 is all day");
-
-        let mut asn = tuesday_net();
-        asn.all_day = true;
-        asn.schedule_kind = "as_needed".into();
-        assert!(!clean(asn).unwrap().all_day);
-
-        let r = repo();
-        let id = r.create_net_listing(&d).unwrap();
-        assert_eq!(r.get_net_listing(&id).unwrap().details, d);
-    }
-
-    #[test]
-    fn upgrading_makes_00_00_to_23_59_all_day() {
-        // NETL-049: as 0038 finds them, written before all-day existed.
-        let r = repo();
-        let id = r.create_net_listing(&clean(tuesday_net()).unwrap()).unwrap();
-        let other = r.create_net_listing(&clean(tuesday_net()).unwrap()).unwrap();
-        r.conn
-            .execute("UPDATE net_listings SET start_time = '00:00', end_time = '23:59', all_day = 0 WHERE id = ?1", params![id])
-            .unwrap();
-        r.conn.execute_batch(include_str!("../migrations/0038_net_listing_all_day.sql").split_once(';').unwrap().1).unwrap();
-        let got = r.get_net_listing(&id).unwrap().details;
-        assert!(got.all_day && got.start_time.is_empty() && got.end_time.is_empty());
-        assert!(!r.get_net_listing(&other).unwrap().details.all_day);
     }
 
     #[test]

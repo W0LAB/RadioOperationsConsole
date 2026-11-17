@@ -34,7 +34,9 @@ but for one list at a time, and an import only ever adds.
 - **SHARE-004:** Export MUST refuse to write over the app's own database.
 - **SHARE-005:** A net MUST be written with its time zone by name
   (`NETL-040`) and all of its sessions, each with its schedule and season,
-  so it means the same on a computer in another zone.
+  so it means the same on a computer in another zone. Each session is a row
+  of its own, with the net's name and text alongside, and rows of the same
+  name are read back as one net's sessions, in order.
 
 ## Importing
 
@@ -57,9 +59,12 @@ but for one list at a time, and an import only ever adds.
 - **SHARE-015:** An import MUST be all or nothing, and each entry it adds
   MUST be recorded in the history, like one added by hand.
 - **SHARE-016:** A net list made before time zones and sessions existed
-  MUST still import. Each net becomes a listing with one session, in the
-  importing computer's zone, and a session running 00:00–23:59 becomes all
-  day (as `NETL-047` and `NETL-049` do on upgrade). The
+  MUST still import, in the importing computer's zone, and a session
+  running 00:00–23:59 becomes all day (as `NETL-047` and `NETL-049` do on
+  upgrade). Rows of the same name become one net's sessions, as in
+  `SHARE-005`; such a list had no other way to hold a net on two bands.
+  Where those rows' notes differ, each MUST be kept in the net's notes after
+  its frequency ("14.115 JS8: … / 7.115 Contestia: …"), so nothing is lost. The
   confirmation MUST say so ("Times in this list are read as
   America/Chicago.") so the operator can correct them afterward
   (`NETL-041`).
