@@ -6,6 +6,8 @@ top. Each release's section here is also its description on the
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-11-17
+
 **What works differently:**
 - Each net in **Nets** now keeps the time zone its times are written in.
   When adding or editing a net, pick **Local**, **Zulu (UTC)** or any
@@ -842,7 +844,8 @@ This version updates the database: once it's run, 2.6.0 can't open the data.
 
 The first release.
 
-[Unreleased]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.2...HEAD
+[Unreleased]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.11.0...HEAD
+[2.11.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.2...v2.11.0
 [2.10.2]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/W0LAB/RadioOperationsConsole/compare/v2.9.1...v2.10.0
