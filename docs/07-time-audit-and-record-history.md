@@ -6,6 +6,8 @@ Every operational record distinguishes when something occurred from when it was 
 
 Canonical time is stored in UTC. The application also retains the activity timezone identifier and the UTC offset applicable to the represented local time.
 
+Net listing schedules are not timestamps. They are clock times in the listing's named time zone, and each meeting is worked out from them ([features/net-listings.md](features/net-listings.md), `NETL-040`–`048`).
+
 ## Required time fields
 
 | Record | Required times |
